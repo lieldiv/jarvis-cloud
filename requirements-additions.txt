@@ -1,0 +1,3 @@
+# STALE — psutil is already merged into requirements.txt (with a pinned
+# version). Kept only for history; `pip install -r requirements.txt` alone
+# is sufficient now, this file has nothing left to add.

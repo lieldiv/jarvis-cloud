@@ -1,0 +1,3 @@
+# Additional dependencies for the Gauntlet Loop GUI, on top of the
+# existing requirements.txt from the base JARVIS project.
+PySide6

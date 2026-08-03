@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S - STARK HUD SYSTEM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00f3ff;
+            --primary-glow: rgba(0, 243, 255, 0.4);
+            --bg-dark: #020813;
+            --panel-bg: rgba(4, 18, 38, 0.75);
+            --border-color: rgba(0, 243, 255, 0.25);
+            --text-dim: #82b6d1;
+            --red-alert: #ff3b3b;
+            --green-active: #00ff88;
+            --user-gold: #ffc800;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Share Tech Mono', monospace; user-select: none; }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 50% 50%, rgba(0, 100, 180, 0.15) 0%, transparent 80%),
+                linear-gradient(to right, rgba(0, 243, 255, 0.07) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 243, 255, 0.07) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+            color: var(--primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            background: rgba(2, 10, 25, 0.6);
+            backdrop-filter: blur(5px);
+        }
+
+        .header-title {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            letter-spacing: 4px;
+            font-size: 24px;
+            color: #fff;
+            text-shadow: 0 0 12px var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Functional Google-account control in the header — the one thing
+           that actually needed to live in that empty space: see who's
+           connected and switch/disconnect without digging through files. */
+        .google-account-ctrl { display: flex; align-items: center; gap: 10px; }
+        .acct-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-active); box-shadow: 0 0 8px var(--green-active); flex-shrink: 0; }
+        .acct-label { font-size: 11px; letter-spacing: 1.5px; color: var(--text-dim); }
+        .acct-btn {
+            font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 1px; cursor: pointer;
+            padding: 7px 14px; border-radius: 20px; border: 1px solid rgba(0, 243, 255, 0.45);
+            background: rgba(0, 243, 255, 0.1); color: #eefcff; text-shadow: 0 0 6px rgba(0, 243, 255, 0.6);
+            transition: all 0.2s;
+        }
+        .acct-btn:hover { background: rgba(0, 243, 255, 0.22); border-color: var(--primary); }
+
+        .sys-ver { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
+        .header-time { font-family: 'Orbitron', sans-serif; font-size: 16px; color: var(--primary); letter-spacing: 2px; }
+
+        .holo-screen {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(500px, 92%);
+            background: rgba(2, 12, 28, 0.9);
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            padding: 25px;
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.3), inset 0 0 20px rgba(0, 243, 255, 0.1);
+            backdrop-filter: blur(15px);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            text-align: center;
+            animation: scanline 2s linear infinite;
+        }
+        
+        .holo-title {
+            font-size: 14px;
+            letter-spacing: 4px;
+            color: var(--green-active);
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .holo-data {
+            font-size: 18px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            line-height: 1.6;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hud-grid {
+            display: grid;
+            grid-template-columns: 270px 1fr 380px;
+            gap: 20px;
+            height: calc(100vh - 95px);
+            margin-top: 10px;
+        }
+
+        /* Narrow viewport (phone, or a resized-narrow desktop window): the
+           fixed 3-column grid was clipping everything except the leftmost
+           panel — the core HUD and the command log were simply never
+           visible. Stack the three panels instead and let the page scroll. */
+        @media (max-width: 900px) {
+            body { height: auto; min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
+            .hud-grid { grid-template-columns: 1fr; height: auto; }
+            .panel { min-height: 260px; }
+            .arc-wrapper { width: clamp(260px, 70vw, 420px); height: clamp(260px, 70vw, 420px); }
+            /* Small screens got the same font sizes as desktop panels a
+               few hundred pixels wider — bump the ones that were reported
+               unreadable (buttons, upcoming-events list, section labels). */
+            .qa-btn { font-size: 16px; padding: 16px 18px; }
+            .event-title { font-size: 20px; }
+            .event-time { font-size: 17px; }
+            .mini-chart-label { font-size: 13px; }
+
+            /* header was untouched by the reflow above: title + the Google
+               account control (label + two buttons) + live clock is too
+               much to fit unwrapped on a phone-width screen, and body's
+               overflow-x:hidden means overflow gets silently clipped
+               rather than becoming a scrollbar — invisible controls, not
+               just an ugly line. Let it wrap onto multiple lines instead. */
+            header { flex-wrap: wrap; row-gap: 8px; }
+            .google-account-ctrl { flex-wrap: wrap; row-gap: 6px; }
+        }
+
+        /* Phone-width specifically (not just "narrow desktop window"):
+           shrink the header further and drop the account-status label text
+           (the green dot already conveys "connected") so the two account
+           buttons reliably have room to stay tappable at 375-414px wide. */
+        @media (max-width: 480px) {
+            .header-title { font-size: 18px; letter-spacing: 2px; }
+            .acct-label { display: none; }
+            .acct-btn { padding: 6px 10px; font-size: 10px; }
+            .sys-ver { font-size: 10px; }
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            position: relative;
+            backdrop-filter: blur(8px);
+            box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.03);
+        }
+
+        .panel-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
+        .stat-bar { height: 6px; background: rgba(0, 243, 255, 0.08); border: 1px solid var(--border-color); margin-bottom: 14px; overflow: hidden; border-radius: 2px; }
+        .stat-fill { height: 100%; background: linear-gradient(90deg, #0077ff, var(--primary)); box-shadow: 0 0 8px var(--primary); transition: width 0.5s ease; }
+
+        /* Fills the space below the stats with real shortcuts instead of
+           decoration — one click runs the same command the text box would. */
+        .quick-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 22px; }
+        .qa-btn {
+            text-align: left; padding: 14px 16px; border-radius: 3px; border: 1px solid rgba(0, 243, 255, 0.4);
+            background: rgba(0, 243, 255, 0.1); color: #eefcff; font-family: 'Orbitron', sans-serif;
+            font-weight: 600; font-size: 14px; letter-spacing: 0.5px; text-shadow: 0 0 6px rgba(0, 243, 255, 0.6);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .qa-btn:hover { background: rgba(0, 243, 255, 0.22); border-color: var(--primary); transform: translateX(3px); }
+
+        /* Real next-events widget — pulls from the same calendar data the
+           voice commands use, polled every minute (calendars don't change
+           second to second, no need for anything faster). */
+        .upcoming-events { margin-top: 22px; }
+        .events-box { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+        .event-item { display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; border-radius: 3px; border: 1px solid var(--border-color); background: rgba(0, 243, 255, 0.05); animation: fade-in 0.4s ease; }
+        .event-time { font-size: 16px; color: var(--user-gold); letter-spacing: 1px; font-weight: 700; }
+        .event-title { font-size: 19px; color: #eefcff; }
+        .events-empty { font-size: 13px; color: var(--text-dim); padding: 6px 0; }
+
+        @keyframes fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+        .center-hud { display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+
+        .arc-wrapper {
+            position: relative;
+            width: clamp(420px, 42vw, 600px);
+            height: clamp(420px, 42vw, 600px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        /* Ring removed again — just the particle sphere on its own now.
+           Leaving this as plain, undecorated space around the sphere until
+           we've actually settled on what (if anything) belongs there. */
+        .ring-outer, .ring-accent, .ring-inner { display: none; }
+
+        .core-sphere {
+            width: 86%; height: 86%; border-radius: 50%;
+            background: radial-gradient(circle,
+                rgba(0, 8, 18, 0.94) 0%, rgba(0, 8, 18, 0.88) 26%,
+                rgba(0, 130, 210, 0.55) 52%, rgba(140, 235, 255, 0.4) 70%,
+                rgba(0, 40, 90, 0.15) 88%, transparent 100%);
+            box-shadow: 0 0 60px 12px rgba(0, 200, 255, 0.28), 0 0 110px 30px rgba(0, 120, 220, 0.14);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: all 0.5s ease; animation: pulse 3s infinite ease-in-out;
+            position: relative; overflow: hidden;
+        }
+
+        /* Two independently-rotating particle layers (opposite directions,
+           different speeds/density) fake a bit of 3D parallax depth for the
+           sphere instead of a flat texture. */
+        .core-dots { position: absolute; inset: 0; border-radius: 50%; z-index: 1; }
+        .core-dots svg { width: 100%; height: 100%; display: block; }
+        .core-dots-1 { animation: rotate 55s linear infinite; opacity: 0.85; }
+        .core-dots-2 { animation: rotate-reverse 38s linear infinite; opacity: 0.5; }
+        .sleeping .core-dots { animation-play-state: paused; opacity: 0.15; }
+
+        .core-text { position: relative; z-index: 2; font-family: 'Orbitron', sans-serif; font-weight: 500; font-size: 20px; color: #fff; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,0,0,0.8), 0 0 16px var(--primary); }
+
+        .wave-container { display: flex; align-items: center; gap: 5px; height: 30px; margin-top: 20px; }
+        .wave-bar { width: 4px; height: 8px; background: var(--primary); border-radius: 2px; box-shadow: 0 0 8px var(--primary); transition: height 0.15s ease; }
+
+        .center-hud.speaking .core-sphere { box-shadow: 0 0 130px 28px rgba(0, 220, 255, 0.5), 0 0 200px 60px rgba(0, 150, 255, 0.25); animation: speak-glow 1s infinite ease-in-out; }
+        .center-hud.speaking .core-dots-1 { animation-duration: 20s; }
+        .center-hud.speaking .core-dots-2 { animation-duration: 14s; }
+        .center-hud.speaking .wave-bar { animation: wave 0.8s infinite ease-in-out alternate; }
+        .center-hud.speaking .wave-bar:nth-child(1) { animation-delay: 0.1s; }
+        .center-hud.speaking .wave-bar:nth-child(2) { animation-delay: 0.3s; }
+        .center-hud.speaking .wave-bar:nth-child(3) { animation-delay: 0.5s; }
+        .center-hud.speaking .wave-bar:nth-child(4) { animation-delay: 0.2s; }
+        .center-hud.speaking .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+        .center-hud.sleeping .core-sphere { background: radial-gradient(circle, #0c1922 0%, #050b12 70%, transparent 100%); box-shadow: 0 0 20px rgba(0, 243, 255, 0.08); animation: none; filter: brightness(0.35); }
+        .center-hud.sleeping .ring-outer { animation-play-state: paused; opacity: 0.18; filter: grayscale(0.7) brightness(0.55); }
+
+        .center-hud.processing .core-sphere { background: radial-gradient(circle, var(--user-gold) 0%, #6b4f00 65%, transparent 100%); box-shadow: 0 0 55px rgba(255, 200, 0, 0.45), inset 0 0 20px #fff8e0; animation: pulse-fast 1s infinite ease-in-out; }
+        .processing .status-dot { background: var(--user-gold); box-shadow: 0 0 8px var(--user-gold); }
+
+        .status-tag { margin-top: 15px; font-family: 'Orbitron', sans-serif; font-size: 15px; letter-spacing: 3px; display: flex; align-items: center; gap: 10px; }
+        .status-dot { width: 8px; height: 8px; background: var(--primary); border-radius: 50%; box-shadow: 0 0 8px var(--primary); }
+        .sleeping .status-dot { background: #445566; box-shadow: none; }
+
+        .mini-chart-label { font-size: 12px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 4px; }
+        .mini-chart-wrap { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 3px; margin-bottom: 10px; padding: 4px 6px; }
+        .mini-chart-wrap canvas { width: 100%; height: 34px; display: block; }
+
+        /* min-height: 0 is load-bearing here — without it, a flex child with
+           overflow:auto grows to fit its content instead of scrolling,
+           which is what was pushing the whole panel (and the buttons below
+           it) out of place after enough log entries piled up. */
+        .log-box { flex: 1; min-height: 0; background: rgba(0, 0, 0, 0.45); border: 1px solid var(--border-color); padding: 14px; font-size: 14px; line-height: 1.5; color: #a3d9ff; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; border-radius: 3px; }
+        .log-entry.sys { color: var(--primary); opacity: 0.85; }
+        .log-entry.user { color: var(--user-gold); }
+        .log-entry.jarvis { color: #ffffff; text-shadow: 0 0 5px rgba(255,255,255,0.3); }
+
+        .cmd-input { width: 100%; background: rgba(0, 0, 0, 0.6); border: 1px solid var(--border-color); padding: 12px 14px; color: #fff; outline: none; margin-bottom: 10px; border-radius: 3px; font-size: 14px; transition: border-color 0.2s, box-shadow 0.2s; }
+        .cmd-input:focus { border-color: var(--primary); box-shadow: 0 0 14px rgba(0, 243, 255, 0.25); }
+
+        .btn-group { display: flex; gap: 8px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 3px; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; letter-spacing: 1px; transition: all 0.2s; }
+        .btn:hover { filter: brightness(1.3); transform: translateY(-1px); }
+        .btn-interrupt { background: rgba(255, 59, 59, 0.15); border: 1px solid var(--red-alert); color: var(--red-alert); }
+        .btn-wake { background: rgba(0, 255, 136, 0.15); border: 1px solid var(--green-active); color: var(--green-active); }
+        .btn-reset { background: rgba(92, 139, 166, 0.15); border: 1px solid var(--text-dim); color: var(--text-dim); }
+
+        footer { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); border-top: 1px solid var(--border-color); padding-top: 8px; }
+
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes rotate-reverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 35px var(--primary-glow); } 50% { transform: scale(1.06); box-shadow: 0 0 60px var(--primary); } }
+        @keyframes pulse-fast { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+        @keyframes speak-glow { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+        @keyframes wave { 0% { height: 6px; } 100% { height: 26px; } }
+
+        /* --- Confirm-to-act modal: JARVIS never creates a calendar event or
+           sends an email on its own — it proposes one, this pops up showing
+           exactly what it's about to do, and nothing happens until APPROVE
+           is clicked (or "yes"/"no" is said, same result either way). */
+        .confirm-overlay {
+            position: fixed; inset: 0; z-index: 2000; display: none;
+            align-items: center; justify-content: center;
+            background: rgba(1, 6, 14, 0.75); backdrop-filter: blur(6px);
+        }
+        .confirm-overlay.show { display: flex; }
+        .confirm-modal {
+            width: 640px; max-width: 92vw;
+            background: rgba(2, 12, 28, 0.97);
+            border: 1px solid var(--user-gold);
+            border-radius: 6px;
+            box-shadow: 0 0 80px rgba(255, 200, 0, 0.4), inset 0 0 28px rgba(255, 200, 0, 0.1);
+            padding: 30px 36px;
+            animation: scanline 2s linear infinite;
+        }
+        .confirm-title {
+            font-family: 'Orbitron', sans-serif; font-size: 16px; letter-spacing: 3px;
+            color: var(--user-gold); border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 12px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px;
+        }
+        .confirm-title::before { content: '⚠'; font-size: 18px; }
+        .confirm-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 26px; }
+        .confirm-field { display: flex; gap: 14px; font-size: 16px; line-height: 1.5; }
+        .confirm-field .k { color: var(--text-dim); min-width: 100px; letter-spacing: 1px; text-transform: uppercase; font-size: 12px; padding-top: 3px; flex-shrink: 0; }
+        .confirm-field .v { color: #fff; text-shadow: 0 0 6px rgba(255,255,255,0.25); word-break: break-word; }
+        .confirm-actions { display: flex; gap: 12px; }
+        .confirm-actions .btn { flex: 1; padding: 16px; font-size: 13px; }
+
+        /* --- Inbox modal: clean structured summary + narration + editable
+           reply. Deliberately bypasses the LLM for the list itself (raw
+           provider data, no markdown risk) — only the optional drafted
+           reply text goes through the model, and even that gets stripped
+           via the same _strip_markdown path as everything else. */
+        .inbox-overlay {
+            position: fixed; inset: 0; z-index: 2600; display: none;
+            align-items: center; justify-content: center;
+            background: rgba(1, 6, 14, 0.75); backdrop-filter: blur(6px);
+        }
+        .inbox-overlay.show { display: flex; }
+        .inbox-modal {
+            width: 640px; max-width: 92vw; max-height: 85vh; overflow-y: auto;
+            background: rgba(2, 12, 28, 0.97); border: 1px solid var(--user-gold);
+            border-radius: 6px; box-shadow: 0 0 80px rgba(255, 200, 0, 0.4), inset 0 0 28px rgba(255, 200, 0, 0.1);
+            padding: 30px 36px; animation: scanline 2s linear infinite;
+        }
+        .inbox-summary { font-size: 14px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.5; }
+        .inbox-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+        .inbox-card { border: 1px solid var(--border-color); border-radius: 4px; padding: 14px 16px; background: rgba(0, 243, 255, 0.04); }
+        .inbox-card .from { font-size: 13px; color: var(--user-gold); font-weight: 600; }
+        .inbox-card .subj { font-size: 15px; color: #fff; margin: 4px 0; }
+        .inbox-card .snip { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+        .inbox-reply-toggle {
+            font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1px;
+            background: rgba(0, 243, 255, 0.08); border: 1px solid rgba(0, 243, 255, 0.4);
+            color: #eefcff; padding: 8px 12px; border-radius: 3px; cursor: pointer; transition: all 0.2s;
+        }
+        .inbox-reply-toggle:hover { background: rgba(0, 243, 255, 0.2); }
+        .inbox-reply-box { margin-top: 12px; display: none; flex-direction: column; gap: 8px; }
+        .inbox-reply-box.show { display: flex; }
+        .inbox-reply-box input, .inbox-reply-box textarea {
+            background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); color: #fff;
+            padding: 10px 12px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; font-size: 13px;
+        }
+        .inbox-reply-box textarea { min-height: 90px; resize: vertical; }
+        .inbox-reply-actions { display: flex; gap: 8px; }
+        .inbox-reply-actions .btn { flex: 1; padding: 10px; font-size: 11px; }
+
+        /* --- First-visit Google connect gate: schedule/email management is
+           JARVIS's central use case (see priorities in CLAUDE.md), so the
+           whole HUD stays locked behind this until Calendar/Gmail/Drive
+           access is granted — no partial/degraded mode to fall back into. */
+        .google-gate {
+            position: fixed; inset: 0; z-index: 3000; display: none;
+            align-items: center; justify-content: center;
+            background: radial-gradient(circle at 50% 40%, rgba(0, 60, 110, 0.4) 0%, var(--bg-dark) 72%);
+            backdrop-filter: blur(10px);
+        }
+        .google-gate.show { display: flex; }
+        .gate-card {
+            width: 640px; max-width: 92vw;
+            background: rgba(2, 12, 28, 0.97);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            box-shadow: 0 0 90px rgba(0, 243, 255, 0.4), inset 0 0 32px rgba(0, 243, 255, 0.08);
+            padding: 44px 48px;
+            text-align: center;
+            animation: scanline 2.4s linear infinite;
+        }
+        .gate-emblem {
+            width: 110px; height: 110px; margin: 0 auto 22px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #00f3ff 0%, #004488 65%, transparent 100%);
+            box-shadow: 0 0 55px var(--primary-glow), inset 0 0 20px #fff;
+            display: flex; align-items: center; justify-content: center;
+            animation: pulse 3s infinite ease-in-out;
+            position: relative;
+        }
+        .gate-emblem::before, .gate-emblem::after {
+            content: ''; position: absolute; border-radius: 50%; border: 2px dashed var(--primary); opacity: 0.6;
+        }
+        .gate-emblem::before { width: 152%; height: 152%; animation: rotate 16s linear infinite; }
+        .gate-emblem::after { width: 128%; height: 128%; border-style: solid; border-color: transparent; border-top-color: var(--primary); border-bottom-color: var(--primary); animation: rotate-reverse 9s linear infinite; }
+        .gate-emblem span { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 28px; color: #fff; text-shadow: 0 0 10px var(--primary); position: relative; z-index: 2; }
+
+        .gate-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 24px; letter-spacing: 3px; color: #fff; text-shadow: 0 0 16px var(--primary); margin-bottom: 12px; }
+        .gate-subtitle { font-size: 16px; color: var(--text-dim); line-height: 1.6; margin-bottom: 28px; }
+
+        .gate-perms { display: flex; flex-direction: column; gap: 10px; text-align: left; margin-bottom: 32px; }
+        .gate-perm { display: flex; align-items: center; gap: 14px; font-size: 15px; color: #cfeeff; background: rgba(0, 243, 255, 0.06); border: 1px solid var(--border-color); border-radius: 4px; padding: 12px 16px; }
+        .gate-perm .ic { font-size: 20px; flex-shrink: 0; }
+
+        .gate-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; padding: 18px; border-radius: 4px; text-decoration: none;
+            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 1px;
+            background: rgba(0, 255, 136, 0.15); border: 1px solid var(--green-active); color: var(--green-active);
+            box-shadow: 0 0 24px rgba(0, 255, 136, 0.2);
+            transition: all 0.2s;
+        }
+        .gate-btn:hover { background: rgba(0, 255, 136, 0.28); box-shadow: 0 0 40px rgba(0, 255, 136, 0.4); transform: translateY(-1px); }
+        .gate-note { margin-top: 18px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.5px; }
+        .gate-error { margin-top: 18px; font-size: 14px; color: var(--red-alert); display: none; }
+        .gate-error.show { display: block; }
+
+        /* Draws a first-time visitor's eye to the one thing they need to do */
+        @keyframes hint-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .status-tag.hint-pulse { animation: hint-pulse 1.6s ease-in-out infinite; }
+
+        /* --- Mic-check + wake-word modal: shown on every visit (after the
+           Google gate, if any) instead of the old "click anywhere" mic-init.
+           Same visual language as .gate-card, smaller since it's two short
+           steps rather than a permissions list. */
+        .mic-gate {
+            position: fixed; inset: 0; z-index: 2900; display: none;
+            align-items: center; justify-content: center;
+            background: radial-gradient(circle at 50% 40%, rgba(0, 60, 110, 0.4) 0%, var(--bg-dark) 72%);
+            backdrop-filter: blur(10px);
+            transition: opacity 0.4s ease;
+        }
+        .mic-gate.show { display: flex; }
+        .mic-gate.closing { opacity: 0; }
+        .mic-card {
+            width: 440px; max-width: 92vw;
+            background: rgba(2, 12, 28, 0.97);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            box-shadow: 0 0 90px rgba(0, 243, 255, 0.4), inset 0 0 32px rgba(0, 243, 255, 0.08);
+            padding: 40px 44px;
+            text-align: center;
+            animation: scanline 2.4s linear infinite;
+        }
+        .mic-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 18px; letter-spacing: 2px; color: #fff; text-shadow: 0 0 14px var(--primary); margin-bottom: 10px; }
+        .mic-subtitle { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; min-height: 18px; }
+        .mic-level-wrap { height: 10px; border-radius: 5px; background: rgba(0, 243, 255, 0.08); border: 1px solid var(--border-color); overflow: hidden; }
+        .mic-level-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #0077ff, var(--primary)); box-shadow: 0 0 10px var(--primary); transition: width 0.08s linear; }
+        .mic-listen-dot { width: 16px; height: 16px; border-radius: 50%; margin: 0 auto; background: var(--green-active); box-shadow: 0 0 16px var(--green-active); animation: hint-pulse 1s ease-in-out infinite; }
+        .mic-error { color: var(--red-alert); font-size: 13px; margin-top: 14px; display: none; }
+        .mic-error.show { display: block; }
+
+        /* Smooth "waking" light-up instead of an instant class-swap pop */
+        .ring-outer, .ring-inner { transition: opacity 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            J.A.R.V.I.S
+            <span class="sys-ver">// STARK OS v3.2</span>
+        </div>
+        <div class="google-account-ctrl" id="google-account-ctrl" style="display:none;">
+            <span class="acct-dot"></span>
+            <span class="acct-label">GOOGLE CONNECTED</span>
+            <button class="acct-btn" onclick="switchGoogleAccount()">⇄ SWITCH ACCOUNT</button>
+            <button class="acct-btn" onclick="disconnectGoogle()">⏻ DISCONNECT</button>
+        </div>
+        <div style="text-align: right;">
+            <div class="header-time" id="live-clock">00:00:00</div>
+            <div class="sys-ver" id="live-date" style="text-align: right;">--</div>
+        </div>
+    </header>
+
+    <div class="google-gate" id="google-gate" onclick="event.stopPropagation()">
+        <div class="gate-card">
+            <div class="gate-emblem"><span>G</span></div>
+            <div class="gate-title">SIGN IN TO CONTINUE</div>
+            <div class="gate-subtitle">Sir, sign in with Google to get your own J.A.R.V.I.S. — this both identifies you and connects your schedule and inbox, in one step.</div>
+            <div class="gate-perms">
+                <div class="gate-perm"><span class="ic">🪪</span> Identity — who you are, so this is your account and your data, not anyone else's</div>
+                <div class="gate-perm"><span class="ic">📅</span> Calendar — read your agenda &amp; create events (always with your approval first)</div>
+                <div class="gate-perm"><span class="ic">✉️</span> Gmail — read summaries &amp; send messages (always with your approval first)</div>
+            </div>
+            <a class="gate-btn" href="/auth/google/start">🔐 SIGN IN WITH GOOGLE</a>
+            <div class="gate-note">Handled entirely by Google's own sign-in page — JARVIS never sees your password.</div>
+            <div class="gate-error" id="gate-error"></div>
+        </div>
+    </div>
+
+    <div class="mic-gate" id="mic-gate">
+        <div class="mic-card">
+            <div class="mic-title" id="mic-title">SCANNING MICROPHONE...</div>
+            <div class="mic-subtitle" id="mic-subtitle">Requesting access…</div>
+            <div class="mic-scan-visual" id="mic-scan-visual">
+                <div class="mic-level-wrap"><div class="mic-level-bar" id="mic-level-bar"></div></div>
+            </div>
+            <div class="mic-listen-visual" id="mic-listen-visual" style="display:none;">
+                <div class="mic-listen-dot"></div>
+            </div>
+            <div class="mic-error" id="mic-error"></div>
+            <button class="gate-btn" id="mic-retry-btn" style="display:none;" onclick="runMicScan()">🔄 RETRY</button>
+            <button class="gate-btn" id="mic-text-fallback-btn" style="display:none; margin-top:12px; background: rgba(255,200,0,0.15); border-color: var(--user-gold); color: var(--user-gold);" onclick="continueWithTextOnly()">⌨️ CONTINUE WITH TEXT INPUT</button>
+        </div>
+    </div>
+
+    <div class="confirm-overlay" id="confirm-overlay">
+        <div class="confirm-modal">
+            <div class="confirm-title" id="confirm-title">AWAITING YOUR APPROVAL</div>
+            <div class="confirm-fields" id="confirm-fields"></div>
+            <div class="confirm-actions">
+                <button class="btn btn-wake" onclick="resolveConfirmation(true)">✅ APPROVE</button>
+                <button class="btn btn-interrupt" onclick="resolveConfirmation(false)">✖ CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="inbox-overlay" id="inbox-overlay">
+        <div class="inbox-modal">
+            <div class="confirm-title">▸ INBOX</div>
+            <div class="inbox-summary" id="inbox-summary">Loading…</div>
+            <div class="inbox-list" id="inbox-list"></div>
+            <div class="confirm-actions">
+                <button class="btn btn-reset" onclick="closeInboxModal()">✖ CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="hud-grid">
+        <div class="panel">
+            <div class="panel-header"><span>▸ CONTROL</span><span>JARVIS</span></div>
+            <div class="quick-actions" style="margin-top: 0;">
+                <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar today?&quot;)">📅 TODAY'S AGENDA</button>
+                <button class="qa-btn" onclick="openInboxModal()">✉️ CHECK INBOX</button>
+                <button class="qa-btn" onclick="sendCommand(&quot;What's the weather today?&quot;)">🌤️ WEATHER</button>
+                <button class="qa-btn" onclick="sendCommand('Play some music on Spotify')">🎵 PLAY MUSIC</button>
+                <button class="qa-btn" onclick="resetMemory()">🧹 CLEAR MEMORY</button>
+            </div>
+
+            <div class="upcoming-events" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                <div class="mini-chart-label">▸ UPCOMING</div>
+                <div class="events-box" id="events-box" style="overflow-y: auto;">
+                    <div class="events-empty">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel center-hud sleeping" id="hud-core">
+            <div class="holo-screen" id="holo-screen">
+                <div class="holo-title">J.A.R.V.I.S // DATA UPLINK</div>
+                <div class="holo-data" id="holo-data"></div>
+            </div>
+            <div class="arc-wrapper" id="arc-wrapper" onclick="triggerWake()">
+                <div class="ring-outer"></div>
+                <div class="ring-accent"></div>
+                <div class="ring-inner"></div>
+                <div class="core-sphere">
+                    <div class="core-dots core-dots-1"><svg id="core-dots-svg-1" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
+                    <div class="core-dots core-dots-2"><svg id="core-dots-svg-2" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
+                    <div class="core-text">J.A.R.V.I.S</div>
+                </div>
+            </div>
+            <div class="wave-container">
+                <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+            </div>
+            <div class="status-tag hint-pulse" id="status-tag">
+                <div class="status-dot"></div><span id="status-text">CLICK TO ENABLE MIC</span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header"><span>▸ COMMAND LOG</span><span>TERMINAL</span></div>
+            <div class="mini-chart-label">▸ SIGNAL</div>
+            <div class="mini-chart-wrap"><canvas id="mini-chart" width="300" height="34"></canvas></div>
+            <div class="log-box" id="log-box">
+                <div class="log-entry sys">SYS: System initialized.</div>
+                <div class="log-entry sys">SYS: Voice Neural Engine Ready.</div>
+                <div class="log-entry jarvis">J.A.R.V.I.S: Please click anywhere to enable listening.</div>
+            </div>
+            <input type="text" class="cmd-input" id="cmd-input" placeholder="Type or speak a command..." onkeydown="if(event.key==='Enter') sendCommand(this.value)">
+            <div class="btn-group">
+                <button class="btn btn-interrupt" onclick="triggerStop()">🔴 STOP [ESC]</button>
+                <button class="btn btn-wake" onclick="triggerWake()">⚡ WAKE UP</button>
+                <button class="btn btn-reset" onclick="resetMemory()">🧹 RESET</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div id="footer-mic-status">MIC STATUS: ONLINE &nbsp;|&nbsp; EDGE-TTS VOICE SYSTEM</div>
+        <div>STARK INDUSTRIES &nbsp;|&nbsp; MARK LI ARCHITECTURE</div>
+    </footer>
+
+    <script>
+        let recognition = null;
+        let isAwake = false;
+        let currentAudio = null;
+        let micInitialized = false;
+        let holoTimeout;
+        let recognitionActive = false; // tracks whether the browser's recognizer is currently running
+        let pendingConfirmToken = null; // set when the backend is waiting on a yes/no for a proposed action
+
+        // Web Speech API (SpeechRecognition) is NOT implemented in iOS
+        // Safari (any browser engine on iOS, since they all use WebKit) and
+        // is inconsistent on some other mobile browsers. Detected once up
+        // front so every code path that would otherwise silently no-op on
+        // a null `recognition` object can instead degrade clearly: skip the
+        // voice-only "say WAKE UP" gate, tell the user why, and let them
+        // drive the whole HUD from the text box instead.
+        const SPEECH_RECOGNITION_SUPPORTED = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        let textOnlyMode = false;
+
+        // --- Mic-check + wake-word modal ------------------------------------
+        // Runs on every visit (not just first-time), right after the Google
+        // gate clears — replaces the old "click anywhere" mic-init with an
+        // explicit scan-then-listen sequence in the same visual language as
+        // the Google gate / confirm modal.
+        let micTestStream = null;
+        let micTestAudioCtx = null;
+
+        function showMicCheckModal() {
+            setHudState('SLEEPING');
+            document.getElementById('mic-gate').classList.add('show');
+            runMicScan();
+        }
+
+        async function runMicScan() {
+            const title = document.getElementById('mic-title');
+            const subtitle = document.getElementById('mic-subtitle');
+            const errorEl = document.getElementById('mic-error');
+            const retryBtn = document.getElementById('mic-retry-btn');
+
+            errorEl.classList.remove('show');
+            retryBtn.style.display = 'none';
+            document.getElementById('mic-listen-visual').style.display = 'none';
+            document.getElementById('mic-scan-visual').style.display = 'block';
+            document.getElementById('mic-level-bar').style.width = '0%';
+            title.innerText = 'SCANNING MICROPHONE...';
+            subtitle.innerText = 'Requesting access…';
+
+            if (!window.isSecureContext || !navigator.mediaDevices) {
+                // Browsers refuse getUserMedia (and often SpeechRecognition
+                // too) outside a secure context. http://127.0.0.1 counts as
+                // secure; http://<your-lan-ip>:5000 from a phone does not —
+                // this is the single most likely way a real user hits this
+                // modal on mobile, so it gets its own accurate message
+                // instead of being lumped in with "permission denied".
+                title.innerText = 'VOICE NEEDS A SECURE CONNECTION';
+                subtitle.innerText = '';
+                errorEl.innerText = "This page is loaded over an insecure connection (common when reached via LAN/phone as http://<ip>:port), sir — browsers block microphone access unless it's HTTPS or localhost. Text input still works fully; see README for enabling HTTPS if you want voice from your phone too.";
+                errorEl.classList.add('show');
+                document.getElementById('mic-text-fallback-btn').style.display = 'inline-flex';
+                return;
+            }
+            try {
+                micTestStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (e) {
+                title.innerText = 'MICROPHONE BLOCKED';
+                subtitle.innerText = '';
+                errorEl.innerText = 'Microphone access denied, sir. Allow it in your browser settings and retry — or continue with text below.';
+                errorEl.classList.add('show');
+                retryBtn.style.display = 'inline-flex';
+                document.getElementById('mic-text-fallback-btn').style.display = 'inline-flex';
+                return;
+            }
+
+            subtitle.innerText = 'Say something, sir…';
+            micTestAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = micTestAudioCtx.createMediaStreamSource(micTestStream);
+            const analyser = micTestAudioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            const levelBar = document.getElementById('mic-level-bar');
+
+            let elapsed = 0;
+            const step = 60;
+            const meterInterval = setInterval(() => {
+                analyser.getByteFrequencyData(data);
+                const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                levelBar.style.width = `${Math.min(100, avg * 1.6)}%`;
+                elapsed += step;
+                if (elapsed >= 1200) {
+                    clearInterval(meterInterval);
+                    finishMicScan();
+                }
+            }, step);
+        }
+
+        function finishMicScan() {
+            // Test stream's only job was proving the mic works — the real
+            // listening goes through SpeechRecognition (initSpeechRecognition),
+            // not this raw getUserMedia stream, so release it now.
+            if (micTestStream) { micTestStream.getTracks().forEach(t => t.stop()); micTestStream = null; }
+            if (micTestAudioCtx) { micTestAudioCtx.close(); micTestAudioCtx = null; }
+
+            document.getElementById('mic-title').innerText = 'MICROPHONE ONLINE ✓';
+            document.getElementById('mic-subtitle').innerText = '';
+            document.getElementById('mic-level-bar').style.width = '100%';
+            setTimeout(startWakePhraseStep, 500);
+        }
+
+        function startWakePhraseStep() {
+            document.getElementById('mic-scan-visual').style.display = 'none';
+
+            if (!SPEECH_RECOGNITION_SUPPORTED) {
+                // No Web Speech API on this browser (e.g. iOS Safari, some
+                // Android WebViews) — voice input simply cannot work here.
+                // Don't leave the user stuck behind a modal that's waiting
+                // for a wake word it can never hear; tell them plainly and
+                // hand them a way through.
+                document.getElementById('mic-listen-visual').style.display = 'none';
+                document.getElementById('mic-title').innerText = 'VOICE INPUT NOT SUPPORTED';
+                document.getElementById('mic-subtitle').innerText = 'This browser can\'t do speech recognition (common on iOS Safari) — you can still type every command.';
+                document.getElementById('status-tag').classList.remove('hint-pulse');
+                document.getElementById('mic-text-fallback-btn').style.display = 'inline-flex';
+                return;
+            }
+
+            document.getElementById('mic-listen-visual').style.display = 'block';
+            document.getElementById('mic-title').innerText = 'SAY "WAKE UP" TO BEGIN';
+            document.getElementById('mic-subtitle').innerText = 'Listening…';
+            document.getElementById('status-tag').classList.remove('hint-pulse');
+
+            if (!micInitialized) {
+                initSpeechRecognition();
+                micInitialized = true;
+            }
+            try { recognition.start(); } catch (e) {}
+        }
+
+        // Dismisses the mic gate and wakes JARVIS without ever touching
+        // SpeechRecognition — used both by the "voice not supported" button
+        // above and available any time voice isn't working out.
+        function continueWithTextOnly() {
+            textOnlyMode = true;
+            document.getElementById('mic-gate').classList.remove('show');
+            addLog('SYS: Voice input isn\'t available in this browser — type commands in the box below instead.', 'sys');
+            isAwake = true;
+            setHudState('LISTENING');
+            document.getElementById('status-text').innerText = 'TEXT MODE — VOICE UNAVAILABLE';
+        }
+
+        // --- Google sign-in gate ------------------------------------------
+        // Runs immediately on load, before anything else — schedule/email
+        // management is JARVIS's central use case, so the HUD stays locked
+        // behind this full-screen gate until Calendar/Gmail/Drive access is
+        // granted. Google redirects back to "/?google_auth=ok|denied|error"
+        // after /auth/google/callback, which this reads once then scrubs
+        // from the URL.
+        function consumeUrlParam(param) {
+            const url = new URL(window.location.href);
+            const val = url.searchParams.get(param);
+            if (val !== null) {
+                url.searchParams.delete(param);
+                window.history.replaceState({}, '', url.pathname + (url.search || ''));
+            }
+            return val;
+        }
+
+        async function checkGoogleAuthGate() {
+            const authResult = consumeUrlParam('google_auth');
+            const gate = document.getElementById('google-gate');
+            const gateError = document.getElementById('gate-error');
+
+            let status;
+            try {
+                const res = await fetch('/api/auth/google/status');
+                status = await res.json();
+            } catch (e) {
+                return;
+            }
+
+            if (!status.configured) {
+                showMicCheckModal(); // no Google client set up on this server — don't block dev/testing use
+                return;
+            }
+
+            if (status.connected) {
+                gate.classList.remove('show');
+                document.getElementById('google-account-ctrl').style.display = 'flex';
+                if (authResult === 'ok') {
+                    addLog('SYS: Google account connected — Calendar, Gmail and Drive access granted.', 'sys');
+                }
+                showMicCheckModal();
+                return;
+            }
+
+            document.getElementById('google-account-ctrl').style.display = 'none';
+            gate.classList.add('show');
+            if (authResult === 'denied') {
+                gateError.innerText = 'Authorization was cancelled, sir. Connect your account to continue.';
+                gateError.classList.add('show');
+            } else if (authResult === 'error') {
+                gateError.innerText = 'Something went wrong connecting your Google account, sir. Please try again.';
+                gateError.classList.add('show');
+            }
+        }
+
+        async function disconnectGoogle() {
+            try {
+                await fetch('/api/auth/google/disconnect', { method: 'POST' });
+            } catch (e) { /* fall through to reload regardless */ }
+            window.location.reload();
+        }
+
+        function switchGoogleAccount() {
+            // Disconnect locally first so the reload lands back on the gate,
+            // then the gate's own link takes them through Google's account
+            // chooser (server sends prompt=select_account) to pick a
+            // different one.
+            disconnectGoogle();
+        }
+
+        checkGoogleAuthGate();
+
+        // Nag reminder: mic is on but nobody's woken JARVIS up — nudge every
+        // 20s so it's obvious it's just waiting, not broken or ignoring you.
+        setInterval(() => {
+            if (micInitialized && !isAwake) {
+                showHologram('Say "WAKE UP" to begin, sir.');
+            }
+        }, 20000);
+
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString('he-IL');
+            document.getElementById('live-date').innerText = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+        }, 1000);
+
+        const MAX_LOG_ENTRIES = 60; // long conversations kept growing this without bound
+
+        function addLog(text, type = 'sys') {
+            const logBox = document.getElementById('log-box');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerText = text;
+            logBox.appendChild(entry);
+            while (logBox.children.length > MAX_LOG_ENTRIES) {
+                logBox.removeChild(logBox.firstChild);
+            }
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function showHologram(text) {
+            const holo = document.getElementById('holo-screen');
+            const holoData = document.getElementById('holo-data');
+            
+            holo.style.display = 'flex';
+            holoData.innerText = '';
+            clearTimeout(holoTimeout);
+
+            let i = 0;
+            function typeWriter() {
+                if (i < text.length) {
+                    holoData.innerHTML += text.charAt(i);
+                    i++;
+                    setTimeout(typeWriter, 35);
+                }
+            }
+            typeWriter();
+
+            holoTimeout = setTimeout(() => {
+                holo.style.display = 'none';
+            }, 8000 + (text.length * 40));
+        }
+
+        // `onStart` (optional) fires exactly when audio actually begins
+        // playing — callers use it to reveal the matching text at that same
+        // moment, instead of showing text the instant the response arrives
+        // and leaving the voice to catch up a beat later.
+        function playJarvisAudio(b64Audio, onStart) {
+            if (currentAudio) currentAudio.pause();
+
+            // A Blob URL lets the browser start playback faster than a raw
+            // data: URI — decoding one giant base64 string in place was the
+            // main source of the text-appears-before-audio-starts delay.
+            const binary = atob(b64Audio);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+
+            currentAudio = new Audio(blobUrl);
+            currentAudio.onplay = () => {
+                setHudState('SPEAKING');
+                if (onStart) onStart();
+            };
+            currentAudio.onended = () => {
+                URL.revokeObjectURL(blobUrl);
+                setHudState('LISTENING');
+                if (isAwake && recognition && !recognitionActive) {
+                    try { recognition.start(); } catch(e){}
+                }
+            };
+            currentAudio.onerror = () => {
+                URL.revokeObjectURL(blobUrl);
+                setHudState('LISTENING');
+            };
+            currentAudio.play().catch(err => {
+                console.log("Audio play blocked:", err);
+                setHudState('LISTENING');
+                if (onStart) onStart(); // still show the text even if autoplay was blocked
+            });
+        }
+
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn('SpeechRecognition unavailable in this browser — voice input disabled, text input still works.');
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                recognitionActive = true;
+                if (isAwake) setHudState('LISTENING');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.toLowerCase().trim();
+
+                if (pendingConfirmToken) {
+                    addLog(`YOU: ${transcript}`, 'user');
+                    handleConfirmationReply(transcript);
+                } else if (!isAwake) {
+                    if (transcript.includes("good morning") || transcript.includes("wake up") || transcript.includes("jarvis")) {
+                        addLog(`YOU: ${transcript} (Wake Word)`, 'user');
+                        wakeJarvis();
+                    }
+                    // no "jarvis" heard while idle — ignored, could be background conversation
+                } else if (transcript.includes("stop")) {
+                    addLog(`YOU: ${transcript}`, 'user');
+                    triggerStop();
+                } else {
+                    // Awake: "jarvis" was already said once to get here — no
+                    // need to repeat it every sentence, converse freely until
+                    // "stop" is heard.
+                    addLog(`YOU: ${transcript}`, 'user');
+                    sendCommand(transcript);
+                }
+            };
+
+            recognition.onerror = (event) => {
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    addLog('SYS: Microphone access blocked. Allow it in your browser settings, or just use the text input below.', 'sys');
+                } else if (event.error !== 'no-speech') {
+                    console.log('Speech error:', event.error);
+                }
+            };
+
+            recognition.onend = () => {
+                recognitionActive = false;
+                if (!currentAudio || currentAudio.paused) {
+                    setTimeout(() => {
+                        if (!recognitionActive) { try { recognition.start(); } catch(e){} }
+                    }, 400);
+                }
+            };
+        }
+
+        async function sendCommand(commandText) {
+            if (!commandText || !commandText.trim()) return;
+            document.getElementById('cmd-input').value = '';
+
+            if (pendingConfirmToken) {
+                addLog(`YOU: ${commandText}`, 'user');
+                handleConfirmationReply(commandText.toLowerCase().trim());
+                return;
+            }
+
+            if (recognition) { try { recognition.stop(); } catch(e){} }
+            setHudState('PROCESSING');
+
+            try {
+                const res = await fetch('/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: commandText })
+                });
+                const data = await res.json();
+
+                if (data.audio) {
+                    playJarvisAudio(data.audio, () => {
+                        addLog(`J.A.R.V.I.S: ${data.response}`, 'jarvis');
+                        showHologram(data.response);
+                    });
+                } else {
+                    addLog(`J.A.R.V.I.S: ${data.response}`, 'jarvis');
+                    showHologram(data.response);
+                    setHudState('LISTENING');
+                }
+            } catch (err) {
+                addLog('SYS: Neural connection failure.', 'sys');
+                setHudState('LISTENING');
+            }
+        }
+
+        // --- Confirm-to-act (calendar events, emails, file deletes, ...) ---
+        // The backend never performs these actions on its own; it parks them
+        // with a token (guardrails.py's request_confirmation) and pushes a
+        // "confirmation_required" SSE event carrying a `kind` + `details`
+        // payload for calendar/email proposals. This renders that as a
+        // holographic modal the user approves/denies by clicking — voice
+        // ("yes"/"no") still works too, since sendCommand/recognition.onresult
+        // both check pendingConfirmToken before forwarding anything to the LLM.
+
+        const CONFIRM_TITLES = {
+            calendar_event: 'PROPOSED CALENDAR EVENT',
+            email: 'PROPOSED EMAIL',
+        };
+
+        function formatDateTimeRange(startIso, endIso) {
+            try {
+                const start = new Date(startIso);
+                const startStr = start.toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+                if (!endIso) return startStr;
+                const end = new Date(endIso);
+                const endStr = end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                return `${startStr} – ${endStr}`;
+            } catch (e) {
+                return `${startIso} – ${endIso}`;
+            }
+        }
+
+        function fieldRow(label, value) {
+            if (!value) return '';
+            const div = document.createElement('div');
+            div.className = 'confirm-field';
+            const k = document.createElement('span'); k.className = 'k'; k.innerText = label;
+            const v = document.createElement('span'); v.className = 'v'; v.innerText = value;
+            div.append(k, v);
+            return div;
+        }
+
+        function showConfirmModal(evt) {
+            pendingConfirmToken = evt.token;
+
+            document.getElementById('confirm-title').innerText = CONFIRM_TITLES[evt.kind] || 'CONFIRMATION REQUIRED';
+
+            const fieldsBox = document.getElementById('confirm-fields');
+            fieldsBox.innerHTML = '';
+            const d = evt.details;
+
+            if (evt.kind === 'calendar_event' && d) {
+                [
+                    fieldRow('Title', d.summary),
+                    fieldRow('When', formatDateTimeRange(d.start_iso, d.end_iso)),
+                    fieldRow('Where', d.location),
+                    fieldRow('Notes', d.description),
+                    fieldRow('Calendar', d.provider),
+                ].forEach(el => { if (el) fieldsBox.appendChild(el); });
+            } else if (evt.kind === 'email' && d) {
+                [
+                    fieldRow('To', d.to),
+                    fieldRow('Subject', d.subject),
+                    fieldRow('Message', d.body),
+                    fieldRow('Via', d.provider),
+                ].forEach(el => { if (el) fieldsBox.appendChild(el); });
+            } else {
+                const el = fieldRow('Action', evt.message);
+                if (el) fieldsBox.appendChild(el);
+            }
+
+            document.getElementById('confirm-overlay').classList.add('show');
+        }
+
+        function hideConfirmModal() {
+            document.getElementById('confirm-overlay').classList.remove('show');
+        }
+
+        function handleConfirmationReply(text) {
+            const approve = /\b(yes|confirm|approve|do it|go ahead)\b/.test(text);
+            const deny = /\b(no|cancel|deny|stop|don't)\b/.test(text);
+            if (!approve && !deny) {
+                addLog('J.A.R.V.I.S: Please say "yes" to confirm or "no" to cancel, sir — or use the buttons on screen.', 'jarvis');
+                return;
+            }
+            resolveConfirmation(approve);
+        }
+
+        async function resolveConfirmation(approve) {
+            const token = pendingConfirmToken;
+            pendingConfirmToken = null;
+            hideConfirmModal();
+            setHudState('PROCESSING');
+            try {
+                const res = await fetch(`/api/confirm/${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ approve })
+                });
+                const data = await res.json();
+                if (data.audio) {
+                    playJarvisAudio(data.audio, () => {
+                        addLog(`J.A.R.V.I.S: ${data.response}`, 'jarvis');
+                        showHologram(data.response);
+                    });
+                } else {
+                    addLog(`J.A.R.V.I.S: ${data.response}`, 'jarvis');
+                    showHologram(data.response);
+                    setHudState('LISTENING');
+                }
+            } catch (err) {
+                addLog('SYS: Could not reach the server to resolve that confirmation.', 'sys');
+                setHudState('LISTENING');
+            }
+        }
+
+        // --- Server-Sent Events: proactive daily briefing + confirmations ---
+        // Connects immediately (not gated behind the "click to init" mic
+        // gate) so a proactive morning brief can play even before the user
+        // has interacted with the page at all.
+
+        function initEventStream() {
+            let es;
+            try {
+                es = new EventSource('/api/stream');
+            } catch (e) {
+                return;
+            }
+
+            es.onmessage = (e) => {
+                let evt;
+                try { evt = JSON.parse(e.data); } catch (err) { return; }
+
+                if (evt.type === 'confirmation_required') {
+                    addLog(`J.A.R.V.I.S: ${evt.message} (approve on screen, or say "yes"/"no")`, 'jarvis');
+                    showConfirmModal(evt);
+                } else if (evt.type === 'daily_briefing') {
+                    if (evt.audio) {
+                        playJarvisAudio(evt.audio, () => {
+                            addLog(`J.A.R.V.I.S: ${evt.text}`, 'jarvis');
+                            showHologram(evt.text);
+                        });
+                    } else {
+                        addLog(`J.A.R.V.I.S: ${evt.text}`, 'jarvis');
+                        showHologram(evt.text);
+                    }
+                } else if (evt.detail !== undefined) {
+                    // vision-action step, e.g. {step, type, detail}
+                    addLog(`SYS: [${evt.type || 'step'}] ${evt.detail}`, 'sys');
+                } else if (evt.attempt !== undefined) {
+                    // self-heal attempt, e.g. {attempt, success, ...}
+                    addLog(`SYS: attempt ${evt.attempt} — ${evt.success ? 'succeeded' : 'retrying'}`, 'sys');
+                }
+            };
+
+            es.onerror = () => { /* EventSource reconnects automatically */ };
+        }
+
+        initEventStream();
+
+        // --- Inbox modal: structured list (no LLM, no markdown risk),
+        // zero-LLM spoken narration (same philosophy as daily_briefing.py),
+        // and an optional draft-then-edit-then-send reply that reuses the
+        // existing confirm-modal for the actual send.
+        let inboxEmailsCache = [];
+
+        async function openInboxModal() {
+            document.getElementById('inbox-overlay').classList.add('show');
+            document.getElementById('inbox-summary').innerText = 'Loading…';
+            document.getElementById('inbox-list').innerHTML = '';
+            let data;
+            try {
+                const res = await fetch('/api/inbox');
+                data = await res.json();
+            } catch (e) {
+                document.getElementById('inbox-summary').innerText = 'Could not reach the server, sir.';
+                return;
+            }
+            inboxEmailsCache = data.emails || [];
+            document.getElementById('inbox-summary').innerText = data.summary;
+            renderInboxList(inboxEmailsCache);
+
+            try {
+                const speakRes = await fetch('/api/speak', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: data.summary }),
+                });
+                const speakData = await speakRes.json();
+                if (speakData.audio) playJarvisAudio(speakData.audio);
+            } catch (e) { /* narration is a nice-to-have, list is already shown */ }
+        }
+
+        function closeInboxModal() {
+            document.getElementById('inbox-overlay').classList.remove('show');
+            if (currentAudio) currentAudio.pause();
+        }
+
+        function renderInboxList(emails) {
+            const list = document.getElementById('inbox-list');
+            list.innerHTML = '';
+            if (!emails.length) {
+                list.innerHTML = '<div class="events-empty">Nothing unread, sir.</div>';
+                return;
+            }
+            emails.forEach((e, i) => {
+                const card = document.createElement('div');
+                card.className = 'inbox-card';
+
+                const from = document.createElement('div'); from.className = 'from'; from.textContent = e.sender_name;
+                const subj = document.createElement('div'); subj.className = 'subj'; subj.textContent = e.subject;
+                const snip = document.createElement('div'); snip.className = 'snip'; snip.textContent = e.snippet;
+
+                const replyBtn = document.createElement('button');
+                replyBtn.className = 'inbox-reply-toggle';
+                replyBtn.textContent = '↩ REPLY';
+                replyBtn.onclick = () => document.getElementById(`inbox-reply-${i}`).classList.toggle('show');
+
+                const replyBox = document.createElement('div');
+                replyBox.className = 'inbox-reply-box';
+                replyBox.id = `inbox-reply-${i}`;
+
+                const instrInput = document.createElement('input');
+                instrInput.type = 'text';
+                instrInput.placeholder = 'What do you want to say?';
+                instrInput.id = `inbox-instr-${i}`;
+
+                const draftBtn = document.createElement('button');
+                draftBtn.className = 'inbox-reply-toggle';
+                draftBtn.textContent = '✍️ DRAFT';
+                draftBtn.onclick = () => draftInboxReply(i);
+
+                const draftArea = document.createElement('textarea');
+                draftArea.id = `inbox-draft-${i}`;
+                draftArea.style.display = 'none';
+                draftArea.placeholder = 'Your editable draft will appear here — tweak it before sending.';
+
+                const sendRow = document.createElement('div');
+                sendRow.className = 'inbox-reply-actions';
+                sendRow.id = `inbox-send-row-${i}`;
+                sendRow.style.display = 'none';
+                const sendBtn = document.createElement('button');
+                sendBtn.className = 'btn btn-wake'; sendBtn.textContent = '📤 SEND';
+                sendBtn.onclick = () => sendInboxReply(i);
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'btn btn-interrupt'; cancelBtn.textContent = '✖ CANCEL';
+                cancelBtn.onclick = () => replyBox.classList.remove('show');
+                sendRow.append(sendBtn, cancelBtn);
+
+                replyBox.append(instrInput, draftBtn, draftArea, sendRow);
+                card.append(from, subj, snip, replyBtn, replyBox);
+                list.appendChild(card);
+            });
+        }
+
+        async function draftInboxReply(i) {
+            const e = inboxEmailsCache[i];
+            const instructions = document.getElementById(`inbox-instr-${i}`).value.trim();
+            if (!instructions) return;
+            const draftArea = document.getElementById(`inbox-draft-${i}`);
+            draftArea.style.display = 'block';
+            draftArea.value = 'Drafting…';
+            try {
+                const res = await fetch('/api/inbox/draft-reply', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender_name: e.sender_name, subject: e.subject, snippet: e.snippet, instructions }),
+                });
+                const data = await res.json();
+                draftArea.value = data.draft || data.error || 'Could not draft a reply.';
+                if (data.draft) document.getElementById(`inbox-send-row-${i}`).style.display = 'flex';
+            } catch (err) {
+                draftArea.value = 'Could not reach the server, sir.';
+            }
+        }
+
+        async function sendInboxReply(i) {
+            const e = inboxEmailsCache[i];
+            const body = document.getElementById(`inbox-draft-${i}`).value.trim();
+            if (!body) return;
+            try {
+                const res = await fetch('/api/inbox/send-reply', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: e.sender_email, subject: e.subject, body }),
+                });
+                const data = await res.json();
+                if (data.token) {
+                    closeInboxModal();
+                    showConfirmModal(data); // same approval step every other write goes through
+                } else {
+                    addLog(`SYS: ${data.message || 'Could not prepare that reply.'}`, 'sys');
+                }
+            } catch (err) {
+                addLog('SYS: Could not reach the server to send that reply.', 'sys');
+            }
+        }
+
+        async function pollUpcomingEvents() {
+            const box = document.getElementById('events-box');
+            try {
+                const res = await fetch('/api/upcoming-events');
+                const data = await res.json();
+                box.innerHTML = '';
+                if (!data.configured || !data.events || data.events.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'events-empty';
+                    empty.textContent = 'Nothing coming up';
+                    box.appendChild(empty);
+                    return;
+                }
+                data.events.forEach(ev => {
+                    const item = document.createElement('div');
+                    item.className = 'event-item';
+                    const time = document.createElement('span');
+                    time.className = 'event-time';
+                    time.textContent = ev.time_label;
+                    const title = document.createElement('span');
+                    title.className = 'event-title';
+                    title.textContent = ev.summary;
+                    item.append(time, title);
+                    box.appendChild(item);
+                });
+            } catch (e) { /* keep whatever was last shown */ }
+        }
+        pollUpcomingEvents();
+        setInterval(pollUpcomingEvents, 60000);
+
+        function wakeJarvis(initialCommand = "Hello Jarvis") {
+            isAwake = true;
+            document.getElementById('mic-gate').classList.remove('show');
+            sendCommand(initialCommand);
+        }
+
+        function triggerWake() {
+            if (SPEECH_RECOGNITION_SUPPORTED) {
+                if (!micInitialized) {
+                    initSpeechRecognition();
+                    micInitialized = true;
+                }
+                if (!recognitionActive) { try { recognition.start(); } catch(e) {} }
+            }
+            wakeJarvis("Hello Jarvis");
+        }
+
+        function triggerStop() {
+            isAwake = false;
+            if (currentAudio) currentAudio.pause();
+            setHudState('SLEEPING');
+            addLog('SYS: JARVIS standby mode. Say "WAKE UP" to start.', 'sys');
+            document.getElementById('holo-screen').style.display = 'none';
+        }
+
+        function setHudState(state) {
+            const core = document.getElementById('hud-core');
+            const statusText = document.getElementById('status-text');
+            core.classList.remove('sleeping', 'speaking', 'processing');
+
+            if (state === 'SLEEPING') {
+                core.classList.add('sleeping');
+                statusText.innerText = 'STANDBY — SAY "WAKE UP" TO START';
+            } else if (state === 'SPEAKING') {
+                core.classList.add('speaking');
+                statusText.innerText = 'JARVIS SPEAKING...';
+            } else if (state === 'PROCESSING') {
+                core.classList.add('processing');
+                statusText.innerText = 'PROCESSING...';
+            } else {
+                statusText.innerText = 'LISTENING — SAY "STOP" TO END';
+            }
+        }
+
+        async function resetMemory() {
+            try {
+                await fetch('/api/reset', { method: 'POST' });
+                addLog('SYS: Conversation memory cleared.', 'sys');
+                showHologram('Memory cleared, sir.');
+            } catch (err) {
+                addLog('SYS: Failed to clear memory.', 'sys');
+            }
+        }
+
+        // --- Visual-only flourishes: two-layer particle sphere, ambient signal line ---
+
+        function buildCoreDots(svgId, count, sizeMult, biasPower) {
+            const svgNS = "http://www.w3.org/2000/svg";
+            const container = document.getElementById(svgId);
+            const centerX = 100, centerY = 100, maxR = 95;
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                // bias toward the center for a denser, brighter core
+                const r = maxR * Math.pow(Math.random(), biasPower);
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+                const distRatio = r / maxR;
+                const size = (0.5 + (1 - distRatio) * 1.6 + Math.random() * 0.4) * sizeMult;
+                const opacity = 0.35 + (1 - distRatio) * 0.65;
+                const dot = document.createElementNS(svgNS, 'circle');
+                dot.setAttribute('cx', x.toFixed(2));
+                dot.setAttribute('cy', y.toFixed(2));
+                dot.setAttribute('r', size.toFixed(2));
+                dot.setAttribute('fill', '#eaffff');
+                dot.setAttribute('opacity', opacity.toFixed(2));
+                container.appendChild(dot);
+            }
+        }
+
+        function initMiniChart() {
+            const canvas = document.getElementById('mini-chart');
+            const ctx = canvas.getContext('2d');
+            let t = 0;
+            function draw() {
+                const w = canvas.width, h = canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                const speaking = document.getElementById('hud-core').classList.contains('speaking');
+                const amp = speaking ? 12 : 4;
+                ctx.strokeStyle = 'rgba(0, 243, 255, 0.9)';
+                ctx.lineWidth = 1.5;
+                ctx.shadowColor = 'rgba(0, 243, 255, 0.6)';
+                ctx.shadowBlur = 4;
+                ctx.beginPath();
+                for (let x = 0; x <= w; x += 3) {
+                    const y = h / 2
+                        + Math.sin(x * 0.06 + t) * amp * (0.6 + 0.4 * Math.sin(t * 0.7 + x * 0.01))
+                        + (Math.random() - 0.5) * (speaking ? 3 : 1);
+                    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                t += speaking ? 0.25 : 0.06;
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        buildCoreDots('core-dots-svg-1', 220, 1, 0.65);
+        buildCoreDots('core-dots-svg-2', 90, 1.6, 0.85);
+        initMiniChart();
+
+        if (!SPEECH_RECOGNITION_SUPPORTED) {
+            const footerStatus = document.getElementById('footer-mic-status');
+            if (footerStatus) footerStatus.innerText = 'MIC STATUS: UNSUPPORTED (TEXT INPUT ONLY) | EDGE-TTS VOICE SYSTEM';
+        }
+    </script>
+</body>
+</html>

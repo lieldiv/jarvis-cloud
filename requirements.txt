@@ -1,0 +1,52 @@
+# Pinned to the exact versions this build was developed and tested against
+# (captured 2026-08). Unpinned requirements meant a fresh `pip install` on a
+# new machine could silently grab a newer, untested release of any of these
+# — including ones with breaking API changes (the Google/MSAL/Groq SDKs move
+# fast) — and fail in ways that have nothing to do with this app's own code.
+# To intentionally upgrade one package, bump it here and re-test the
+# feature(s) it touches rather than just deleting the pin.
+
+flask==3.1.3
+groq==1.0.0
+edge-tts==7.2.8
+requests==2.32.3
+python-dotenv==1.1.0
+gunicorn==23.0.0
+
+# --- Windows desktop automation (pyautogui pulls in Pillow + pyscreeze
+# transitively, but Pillow is pinned explicitly too since vision_action.py
+# imports it directly — an implicit transitive dependency for something
+# imported by name in our own code is a portability trap waiting to happen
+# the moment pyautogui's own dependency list changes upstream).
+#
+# CLOUD DEPLOY: commented out for this build. JARVIS_DESKTOP_TOOLS=false
+# means the app never calls into these at runtime, and pyautogui/pygetwindow
+# won't *install* cleanly on a headless Linux container anyway (no X11
+# display). The guarded-import pattern in app.py/vision_action.py already
+# handles them being absent gracefully — no code change needed to remove
+# them, just uncomment below if this folder is ever run on Windows again.
+# pyautogui==0.9.54
+# pygetwindow==0.0.9
+# Pillow==11.2.1
+# pywhatkit==5.4
+
+# --- Spotify -----------------------------------------------------------
+spotipy==2.26.0
+
+# --- Process inspection (kill_process tool) -----------------------------
+psutil==7.0.0
+
+# --- Google Calendar + Gmail ---------------------------------------------
+google-auth==2.40.0
+google-auth-oauthlib==1.3.1
+google-api-python-client==2.169.0
+
+# --- Microsoft Outlook/365 (Graph API) ------------------------------------
+msal==1.37.0
+
+# --- TLS trust (see cert_bootstrap.py) ------------------------------------
+# Pinned explicitly (not just relied on as a transitive dep of requests/
+# edge-tts) because cert_bootstrap.py reaches into certifi's internals
+# (certifi.where / certifi.core.where) at import time — a certifi release
+# that renames/removes those would break cert_bootstrap.py silently.
+certifi==2025.4.26

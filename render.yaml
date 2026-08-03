@@ -1,0 +1,41 @@
+# Render Blueprint — see https://render.com/docs/blueprint-spec
+# Deploy: push this repo to GitHub, then "New +" -> "Blueprint" on Render
+# and point it at the repo. Render reads this file and creates the service.
+#
+# Before the first deploy:
+#   1. Comment out pyautogui/pygetwindow/Pillow/pywhatkit in requirements.txt
+#      (see the note there) — they won't install on Render's Linux build.
+#   2. Create a "Web application" type OAuth client in Google Cloud Console
+#      (see google_service.py's docstring) with redirect URI:
+#      https://<your-service-name>.onrender.com/auth/google/callback
+#   3. Set the env vars below as actual secrets in the Render dashboard —
+#      never commit real values into this file or into .env.
+services:
+  - type: web
+    name: jarvis-cloud
+    runtime: python
+    plan: starter          # smallest paid plan with a persistent disk — the
+                            # free plan's ephemeral filesystem would lose
+                            # users.db (everyone's accounts/tokens) on every
+                            # restart, which defeats the point of this build
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    disk:
+      name: jarvis-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: JARVIS_DESKTOP_TOOLS
+        value: "false"
+      - key: JARVIS_DAILY_BRIEFING
+        value: "false"       # scheduler is disabled in code too; belt and suspenders
+      - key: JARVIS_DB_PATH
+        value: /opt/render/project/src/data/users.db
+      - key: GROQ_API_KEY
+        sync: false           # set manually in the Render dashboard
+      - key: GOOGLE_CLIENT_ID
+        sync: false            # the "Web application" client, not the local Desktop one
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FLASK_SECRET_KEY
+        sync: false            # generate once (e.g. `python -c "import secrets; print(secrets.token_hex(32))"`) and keep it stable across deploys

@@ -1,0 +1,19 @@
+.env
+.google_cache/
+.ms_cache.bin
+.spotify_cache
+.certs/
+jarvis.log
+__pycache__/
+*.pyc
+
+# Multi-user build: real users' accounts + Google tokens live here — never
+# commit this, same reasoning as .env/.google_cache above.
+users.db
+data/
+
+# PyInstaller build output (packaging/jarvis.spec) — regenerate with
+# `pyinstaller packaging/jarvis.spec --distpath dist --workpath build`,
+# never commit the ~150-300MB of generated binaries.
+build/
+dist/
