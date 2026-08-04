@@ -537,13 +537,13 @@
             </div>
             <a class="gate-btn" href="/auth/google/start">🔐 SIGN IN WITH GOOGLE</a>
             <div class="gate-note">Handled entirely by Google's own sign-in page — JARVIS never sees your password.</div>
-            <div class="gate-error" id="gate-error"></div>
+            <div class="gate-error" id="gate-error" dir="auto"></div>
         </div>
     </div>
 
     <div class="mic-gate" id="mic-gate">
         <div class="mic-card">
-            <div class="mic-title" id="mic-title">SCANNING MICROPHONE...</div>
+            <div class="mic-title" id="mic-title" dir="auto">SCANNING MICROPHONE...</div>
             <div class="mic-subtitle" id="mic-subtitle">Requesting access…</div>
             <div class="mic-scan-visual" id="mic-scan-visual">
                 <div class="mic-level-wrap"><div class="mic-level-bar" id="mic-level-bar"></div></div>
@@ -551,7 +551,7 @@
             <div class="mic-listen-visual" id="mic-listen-visual" style="display:none;">
                 <div class="mic-listen-dot"></div>
             </div>
-            <div class="mic-error" id="mic-error"></div>
+            <div class="mic-error" id="mic-error" dir="auto"></div>
             <button class="gate-btn" id="mic-retry-btn" style="display:none;" onclick="runMicScan()">🔄 RETRY</button>
             <button class="gate-btn" id="mic-text-fallback-btn" style="display:none; margin-top:12px; background: rgba(255,200,0,0.15); border-color: var(--user-gold); color: var(--user-gold);" onclick="continueWithTextOnly()">⌨️ CONTINUE WITH TEXT INPUT</button>
         </div>
@@ -616,7 +616,7 @@
         <div class="panel center-hud sleeping" id="hud-core">
             <div class="holo-screen" id="holo-screen">
                 <div class="holo-title">J.A.R.V.I.S // DATA UPLINK</div>
-                <div class="holo-data" id="holo-data"></div>
+                <div class="holo-data" id="holo-data" dir="auto"></div>
             </div>
             <div class="arc-wrapper" id="arc-wrapper" onclick="triggerWake()">
                 <div class="ring-outer"></div>
@@ -632,7 +632,7 @@
                 <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
             </div>
             <div class="status-tag hint-pulse" id="status-tag">
-                <div class="status-dot"></div><span id="status-text">CLICK TO ENABLE MIC</span>
+                <div class="status-dot"></div><span id="status-text" dir="auto">CLICK TO ENABLE MIC</span>
             </div>
         </div>
 
@@ -961,6 +961,9 @@
             const logBox = document.getElementById('log-box');
             const entry = document.createElement('div');
             entry.className = `log-entry ${type}`;
+            entry.dir = 'auto'; // Hebrew + English lines mix now — let the browser
+            // pick each entry's direction from its own first strong character
+            // instead of forcing one direction on every line.
             entry.innerText = text;
             logBox.appendChild(entry);
             while (logBox.children.length > MAX_LOG_ENTRIES) {
