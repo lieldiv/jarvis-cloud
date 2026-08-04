@@ -217,6 +217,34 @@ _conversation_histories: dict[str, list] = {}
 def _history_for(user_id: str) -> list:
     return _conversation_histories.setdefault(user_id, [])
 
+# Multi-user cloud build: pyautogui/os.startfile/taskkill only make sense
+# controlling a real Windows desktop, and there is none here — no single
+# user's phone/browser session has "a desktop" for this server to touch.
+# Defaults to enabled so local Windows dev/testing of this same codebase
+# still works unchanged; the deployed cloud host sets this to "false".
+DESKTOP_TOOLS_ENABLED = os.environ.get("JARVIS_DESKTOP_TOOLS", "true").lower() == "true"
+
+# The open_application/computer_use paragraph below describes tools that
+# ACTIVE_TOOLS (further down) omits entirely when DESKTOP_TOOLS_ENABLED is
+# false — no point spending tokens telling the model how to use tools it
+# was never actually given, on every single request.
+_DESKTOP_CONTROL_GUIDANCE = (
+    " Never use computer_use for Spotify playback. You control this "
+    "computer the way a person does otherwise: open_application launches "
+    "an app, and computer_use then takes a screenshot and clicks/types/"
+    "drags inside it — use computer_use only for on-screen actions that "
+    "have no dedicated tool (clicking a button, filling a form, drawing "
+    "something, browser navigation). IMPORTANT: opening an app is rarely "
+    "the whole job — if the user's request implies doing something inside "
+    "the app and no dedicated tool covers it, you MUST call computer_use "
+    "as a follow-up after open_application returns, in the same turn. "
+    "Never treat 'I opened it' as a finished task when the user asked for "
+    "an action inside it."
+    if DESKTOP_TOOLS_ENABLED else
+    " There's no Windows desktop for you to control in this deployment — "
+    "don't offer to open or click around inside desktop applications."
+)
+
 SYSTEM_PROMPT = (
     "You are J.A.R.V.I.S., Tony Stark's AI assistant. Respond in concise, "
     "polished British English, and address the user as 'sir'. Keep answers "
@@ -240,17 +268,8 @@ SYSTEM_PROMPT = (
     "needs. For Spotify specifically, ALWAYS use play_on_spotify to play or "
     "search for a song — it controls real playback via the Spotify API "
     "(opens the app itself if needed) and is far more reliable than "
-    "clicking around the screen. Never use computer_use for Spotify "
-    "playback. You control this computer the way a person does otherwise: "
-    "open_application launches an app, and computer_use then takes a "
-    "screenshot and clicks/types/drags inside it — use computer_use only "
-    "for on-screen actions that have no dedicated tool (clicking a button, "
-    "filling a form, drawing something, browser navigation). IMPORTANT: "
-    "opening an app is rarely the whole job — if the user's request implies "
-    "doing something inside the app and no dedicated tool covers it, you "
-    "MUST call computer_use as a follow-up after open_application returns, "
-    "in the same turn. Never treat 'I opened it' as a finished task when "
-    "the user asked for an action inside it. Also available: get_weather, "
+    "clicking around the screen." + _DESKTOP_CONTROL_GUIDANCE +
+    " Also available: get_weather, "
     "web_search (opens results in the browser), play_media (YouTube, for "
     "non-Spotify video/music), and calculate. Use write_and_test_code when "
     "asked to write and verify a script. Call the right tool instead of "
@@ -287,13 +306,6 @@ PAINT_SIZE_OFFSETS = {                    # drag distance, added to the start po
 # containing `&`, `|`, or `;` would be interpreted as a second command. The
 # map below launches known apps directly (shell=False), and os.startfile is
 # used for anything else since it goes through ShellExecute, not a shell.
-
-# Multi-user cloud build: pyautogui/os.startfile/taskkill only make sense
-# controlling a real Windows desktop, and there is none here — no single
-# user's phone/browser session has "a desktop" for this server to touch.
-# Defaults to enabled so local Windows dev/testing of this same codebase
-# still works unchanged; the deployed cloud host sets this to "false".
-DESKTOP_TOOLS_ENABLED = os.environ.get("JARVIS_DESKTOP_TOOLS", "true").lower() == "true"
 
 APP_MAP = {
     "chrome": {"type": "url", "target": "https://www.google.com"},
@@ -907,6 +919,18 @@ TOOLS = [
     },
 ]
 
+# open_application/close_application/computer_use are always dead weight in
+# this cloud build (DESKTOP_TOOLS_ENABLED=false — no Windows desktop for any
+# of them to control) but their full JSON schemas were still being sent to
+# Groq on every single request regardless, burning tokens against the
+# free-tier rate limit for tools that could only ever return a canned
+# refusal. Computed once at import time (DESKTOP_TOOLS_ENABLED doesn't
+# change at runtime), not filtered per-request.
+_DESKTOP_ONLY_TOOL_NAMES = {"open_application", "close_application", "computer_use"}
+ACTIVE_TOOLS = TOOLS if DESKTOP_TOOLS_ENABLED else [
+    t for t in TOOLS if t["function"]["name"] not in _DESKTOP_ONLY_TOOL_NAMES
+]
+
 def _computer_use(user_id, args):
     return vision_action.vision_action_loop(
         groq_client, args.get("goal", ""),
@@ -1028,7 +1052,7 @@ def _complete_with_retry(messages):
     """
     try:
         return groq_client.chat.completions.create(
-            model=MODEL_NAME, messages=messages, tools=TOOLS,
+            model=MODEL_NAME, messages=messages, tools=ACTIVE_TOOLS,
             tool_choice="auto", temperature=0.6, max_tokens=MAX_TOKENS,
         )
     except BadRequestError as e:
@@ -1038,7 +1062,7 @@ def _complete_with_retry(messages):
             raise
         logger.warning("Tool call JSON malformed, retrying once...")
         return groq_client.chat.completions.create(
-            model=MODEL_NAME, messages=messages, tools=TOOLS,
+            model=MODEL_NAME, messages=messages, tools=ACTIVE_TOOLS,
             tool_choice="auto", temperature=0.6, max_tokens=MAX_TOKENS,
         )
 
