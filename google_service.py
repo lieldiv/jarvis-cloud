@@ -232,7 +232,7 @@ def list_calendar_events(user_id: str, time_min_iso: str, time_max_iso: str, max
 def create_calendar_event(user_id: str, summary: str, start_iso: str, end_iso: str, description: str = "", location: str = "") -> str:
     svc = _calendar_service(user_id)
     if not svc:
-        return "Google Calendar isn't connected, sir — please sign in again."
+        return "Google Calendar לא מחובר, אדוני — אנא התחבר שוב."
     body = {
         "summary": summary,
         "description": description,
@@ -242,13 +242,13 @@ def create_calendar_event(user_id: str, summary: str, start_iso: str, end_iso: s
     }
     try:
         svc.events().insert(calendarId="primary", body=body).execute()
-        return f"Created '{summary}' on your Google Calendar, sir."
+        return f"נוצר '{summary}' ב-Google Calendar שלך, אדוני."
     except HttpError as e:
         logger.error(f"Google Calendar create failed: {e}")
-        return "I couldn't create that event on Google Calendar, sir — the request was refused. Please try again shortly."
+        return "לא הצלחתי ליצור את האירוע ב-Google Calendar, אדוני — הבקשה נדחתה. אנא נסה שוב בקרוב."
     except Exception as e:
         logger.error(f"Google Calendar create failed (network/transport error): {e}")
-        return "I couldn't reach Google Calendar to create that event, sir — check the internet connection and try again."
+        return "לא הצלחתי להתחבר ל-Google Calendar כדי ליצור את האירוע, אדוני — בדוק את חיבור האינטרנט ונסה שוב."
 
 
 def list_recent_emails(user_id: str, max_results: int = 8, query: str = "is:unread"):
@@ -286,17 +286,17 @@ def list_recent_emails(user_id: str, max_results: int = 8, query: str = "is:unre
 def send_email(user_id: str, to: str, subject: str, body: str) -> str:
     svc = _gmail_service(user_id)
     if not svc:
-        return "Gmail isn't connected, sir — please sign in again."
+        return "Gmail לא מחובר, אדוני — אנא התחבר שוב."
     try:
         message = MIMEText(body)
         message["to"] = to
         message["subject"] = subject
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
         svc.users().messages().send(userId="me", body={"raw": raw}).execute()
-        return f"Sent the email to {to}, sir."
+        return f"האימייל נשלח אל {to}, אדוני."
     except HttpError as e:
         logger.error(f"Gmail send failed: {e}")
-        return "I couldn't send that email, sir — Gmail refused the request. Please try again shortly."
+        return "לא הצלחתי לשלוח את האימייל, אדוני — Gmail דחה את הבקשה. אנא נסה שוב בקרוב."
     except Exception as e:
         logger.error(f"Gmail send failed (network/transport error): {e}")
-        return "I couldn't reach Gmail to send that email, sir — check the internet connection and try again."
+        return "לא הצלחתי להתחבר ל-Gmail כדי לשלוח את האימייל, אדוני — בדוק את חיבור האינטרנט ונסה שוב."

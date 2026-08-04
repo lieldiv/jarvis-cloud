@@ -14,7 +14,7 @@ import edge_tts
 
 logger = logging.getLogger("jarvis.tts")
 
-VOICE = "en-GB-RyanNeural"  # run `edge-tts --list-voices` to see others
+VOICE = "he-IL-AvriNeural"  # run `edge-tts --list-voices` to see others (he-IL-HilaNeural is the female alternative)
 
 
 async def generate_tts_base64(text: str, voice: str = VOICE):

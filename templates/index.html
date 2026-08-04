@@ -775,7 +775,7 @@
         function continueWithTextOnly() {
             textOnlyMode = true;
             document.getElementById('mic-gate').classList.remove('show');
-            addLog('SYS: Voice input isn\'t available in this browser — type commands in the box below instead.', 'sys');
+            addLog('SYS: קלט קולי לא זמין בדפדפן הזה — הקלד פקודות בתיבה למטה במקום זאת.', 'sys');
             isAwake = true;
             setHudState('LISTENING');
             document.getElementById('status-text').innerText = 'TEXT MODE — VOICE UNAVAILABLE';
@@ -820,7 +820,7 @@
                 gate.classList.remove('show');
                 document.getElementById('google-account-ctrl').style.display = 'flex';
                 if (authResult === 'ok') {
-                    addLog('SYS: Google account connected — Calendar, Gmail and Drive access granted.', 'sys');
+                    addLog('SYS: חשבון Google מחובר — ניתנה גישה ליומן, Gmail ו-Drive.', 'sys');
                 }
                 showMicCheckModal();
                 return;
@@ -858,7 +858,7 @@
         // 20s so it's obvious it's just waiting, not broken or ignoring you.
         setInterval(() => {
             if (micInitialized && !isAwake) {
-                showHologram('Say "WAKE UP" to begin, sir.');
+                showHologram('אמור "WAKE UP" כדי להתחיל, אדוני.');
             }
         }, 20000);
 
@@ -953,7 +953,7 @@
             recognition = new SpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = false;
-            recognition.lang = 'en-US';
+            recognition.lang = 'he-IL';
 
             recognition.onstart = () => {
                 recognitionActive = true;
@@ -967,12 +967,16 @@
                     addLog(`YOU: ${transcript}`, 'user');
                     handleConfirmationReply(transcript);
                 } else if (!isAwake) {
-                    if (transcript.includes("good morning") || transcript.includes("wake up") || transcript.includes("jarvis")) {
+                    // Hebrew recognition (he-IL) can still transcribe clearly-spoken
+                    // English loanwords, but isn't guaranteed to — so the wake/stop
+                    // words are matched in both languages rather than English only.
+                    if (transcript.includes("good morning") || transcript.includes("wake up") || transcript.includes("jarvis") ||
+                        transcript.includes("בוקר טוב") || transcript.includes("תתעורר") || transcript.includes("ג'רוויס") || transcript.includes("גרוויס")) {
                         addLog(`YOU: ${transcript} (Wake Word)`, 'user');
                         wakeJarvis();
                     }
-                    // no "jarvis" heard while idle — ignored, could be background conversation
-                } else if (transcript.includes("stop")) {
+                    // no wake word heard while idle — ignored, could be background conversation
+                } else if (transcript.includes("stop") || transcript.includes("עצור") || transcript.includes("תפסיק") || transcript.includes("תעצור")) {
                     addLog(`YOU: ${transcript}`, 'user');
                     triggerStop();
                 } else {
@@ -986,7 +990,7 @@
 
             recognition.onerror = (event) => {
                 if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    addLog('SYS: Microphone access blocked. Allow it in your browser settings, or just use the text input below.', 'sys');
+                    addLog('SYS: הגישה למיקרופון חסומה. אפשר אותה בהגדרות הדפדפן, או פשוט השתמש בתיבת הטקסט למטה.', 'sys');
                 } else if (event.error !== 'no-speech') {
                     console.log('Speech error:', event.error);
                 }
@@ -1034,7 +1038,7 @@
                     setHudState('LISTENING');
                 }
             } catch (err) {
-                addLog('SYS: Neural connection failure.', 'sys');
+                addLog('SYS: כשל בחיבור הנוירוני.', 'sys');
                 setHudState('LISTENING');
             }
         }
@@ -1215,7 +1219,7 @@
                 pendingConfirmEvt = { ...evt, details: data.details, message: data.message };
                 exitConfirmEditMode();
             } catch (err) {
-                addLog('SYS: Could not reach the server to save that edit.', 'sys');
+                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לשמור את השינוי.', 'sys');
             }
         }
 
@@ -1227,10 +1231,15 @@
         }
 
         function handleConfirmationReply(text) {
-            const approve = /\b(yes|confirm|approve|do it|go ahead)\b/.test(text);
-            const deny = /\b(no|cancel|deny|stop|don't)\b/.test(text);
+            // \b is ASCII-only in JS regex, so Hebrew terms are matched with
+            // plain substring checks instead (see the same reasoning on the
+            // wake/stop-word matching above).
+            const approve = /\b(yes|confirm|approve|do it|go ahead)\b/.test(text) ||
+                text.includes('כן') || text.includes('אשר') || text.includes('בסדר');
+            const deny = /\b(no|cancel|deny|stop|don't)\b/.test(text) ||
+                text.includes('לא') || text.includes('בטל') || text.includes('ביטול');
             if (!approve && !deny) {
-                addLog('J.A.R.V.I.S: Please say "yes" to confirm or "no" to cancel, sir — or use the buttons on screen.', 'jarvis');
+                addLog('J.A.R.V.I.S: אמור "כן" לאישור או "לא" לביטול, אדוני — או השתמש בכפתורים על המסך.', 'jarvis');
                 return;
             }
             resolveConfirmation(approve);
@@ -1259,7 +1268,7 @@
                     setHudState('LISTENING');
                 }
             } catch (err) {
-                addLog('SYS: Could not reach the server to resolve that confirmation.', 'sys');
+                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לטפל באישור הזה.', 'sys');
                 setHudState('LISTENING');
             }
         }
@@ -1439,7 +1448,7 @@
                     addLog(`SYS: ${data.message || 'Could not prepare that reply.'}`, 'sys');
                 }
             } catch (err) {
-                addLog('SYS: Could not reach the server to send that reply.', 'sys');
+                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לשלוח את התשובה.', 'sys');
             }
         }
 
@@ -1494,7 +1503,7 @@
             isAwake = false;
             if (currentAudio) currentAudio.pause();
             setHudState('SLEEPING');
-            addLog('SYS: JARVIS standby mode. Say "WAKE UP" to start.', 'sys');
+            addLog('SYS: JARVIS במצב המתנה. אמור "WAKE UP" כדי להתחיל.', 'sys');
             document.getElementById('holo-screen').style.display = 'none';
         }
 
@@ -1520,10 +1529,10 @@
         async function resetMemory() {
             try {
                 await fetch('/api/reset', { method: 'POST' });
-                addLog('SYS: Conversation memory cleared.', 'sys');
+                addLog('SYS: זיכרון השיחה נוקה.', 'sys');
                 showHologram('Memory cleared, sir.');
             } catch (err) {
-                addLog('SYS: Failed to clear memory.', 'sys');
+                addLog('SYS: ניקוי הזיכרון נכשל.', 'sys');
             }
         }
 
