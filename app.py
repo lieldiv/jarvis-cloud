@@ -11,9 +11,9 @@ Major changes from the original version:
      (and doesn't misfire on words like "closed" containing "close").
   3. MEMORY: the assistant now keeps short-term conversation history, so
      follow-up questions ("what about tomorrow?") work.
-  4. RELIABILITY: every external call (weather, TTS, subprocess, pywhatkit)
-     is wrapped so one failure returns a spoken error instead of crashing
-     the request or leaving the user with a silent HUD.
+  4. RELIABILITY: every external call (weather, TTS, subprocess) is wrapped
+     so one failure returns a spoken error instead of crashing the request
+     or leaving the user with a silent HUD.
   5. NEW TOOLS: draw_shape_in_paint (mouse automation to draw a circle),
      and calculate (safe AST-based arithmetic, typed into the Calculator
      app so it's visible on screen). See README for setup and known
@@ -73,11 +73,6 @@ try:
     import pyautogui
 except Exception:
     pyautogui = None
-
-try:
-    import pywhatkit
-except Exception:
-    pywhatkit = None
 
 try:
     import pygetwindow as gw
@@ -273,10 +268,8 @@ SYSTEM_PROMPT = (
     "to be reminded of something later.\n\n"
     "Beyond that, you are a general-purpose agent for whatever the user "
     "needs." + _DESKTOP_CONTROL_GUIDANCE +
-    " Also available: get_weather, "
-    "web_search (opens results in the browser), play_media (YouTube, for "
-    "music/video), and calculate. Use write_and_test_code when "
-    "asked to write and verify a script. Call the right tool instead of "
+    " Also available: get_weather and calculate. Use write_and_test_code "
+    "when asked to write and verify a script. Call the right tool instead of "
     "guessing or saying you can't; if a command doesn't match any tool, "
     "just respond conversationally."
 )
@@ -429,30 +422,6 @@ def close_application(app_name: str) -> str:
         return f"I couldn't close {raw_name}, sir."
 
 
-def web_search(query: str) -> str:
-    query = (query or "").strip()
-    if not query:
-        return "What would you like me to search for, sir?"
-    webbrowser.open(f"https://www.google.com/search?q={requests.utils.quote(query)}")
-    return f"Searching Google for {query}, sir."
-
-
-def play_media(query: str) -> str:
-    query = (query or "").strip()
-    if not query:
-        return "What would you like me to play, sir?"
-    if pywhatkit:
-        try:
-            pywhatkit.playonyt(query)
-            return f"Playing {query} on YouTube, sir."
-        except Exception as e:
-            logger.warning(f"pywhatkit failed for '{query}': {e}")
-    # Fallback: pywhatkit missing or it failed (it's known to be flaky) —
-    # open search results instead of failing silently.
-    webbrowser.open(f"https://www.youtube.com/results?search_query={requests.utils.quote(query)}")
-    return f"I've opened YouTube results for {query}, sir."
-
-
 def draw_shape_in_paint(shape: str = "circle", size: str = "medium") -> str:
     if not pyautogui:
         return "Drawing automation isn't available on this system, sir."
@@ -588,30 +557,6 @@ TOOLS = [
                 "type": "object",
                 "properties": {"app_name": {"type": "string"}},
                 "required": ["app_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search Google for a query and open the results in the browser.",
-            "parameters": {
-                "type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "play_media",
-            "description": "Play a song or video on YouTube.",
-            "parameters": {
-                "type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"],
             },
         },
     },
@@ -916,8 +861,6 @@ _STATIC_TOOL_IMPL = {
     "get_weather": lambda args: get_live_weather(args.get("location", "")),
     "open_application": lambda args: open_application(args.get("app_name", "")),
     "close_application": lambda args: close_application(args.get("app_name", "")),
-    "web_search": lambda args: web_search(args.get("query", "")),
-    "play_media": lambda args: play_media(args.get("query", "")),
     "calculate": lambda args: calculate(args.get("expression", "")),
 }
 

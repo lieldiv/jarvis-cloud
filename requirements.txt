@@ -28,7 +28,6 @@ gunicorn==23.0.0
 # pyautogui==0.9.54
 # pygetwindow==0.0.9
 # Pillow==11.2.1
-# pywhatkit==5.4
 
 # --- Process inspection (kill_process tool) -----------------------------
 psutil==7.0.0
