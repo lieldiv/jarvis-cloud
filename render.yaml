@@ -24,7 +24,12 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
+    # threads=16: each open browser tab holds one /api/stream (SSE) connection
+    # open indefinitely, permanently pinning a thread for as long as the tab
+    # stays open. With only 2 threads, two simultaneous tabs (e.g. desktop +
+    # phone) exhausted the pool and made every other request — including
+    # /auth/google/start — hang forever waiting for a free thread.
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 16 --timeout 120
     envVars:
       - key: JARVIS_DESKTOP_TOOLS
         value: "false"
