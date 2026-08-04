@@ -44,6 +44,11 @@ google-api-python-client==2.169.0
 # --- Microsoft Outlook/365 (Graph API) ------------------------------------
 msal==1.37.0
 
+# --- Timezone-aware "current time" for the LLM (app.py's LOCAL_TZ) --------
+# stdlib zoneinfo needs an IANA tz database; not every base Linux image
+# ships one. This pip package is zoneinfo's documented fallback source.
+tzdata==2025.2
+
 # --- TLS trust (see cert_bootstrap.py) ------------------------------------
 # Pinned explicitly (not just relied on as a transitive dep of requests/
 # edge-tts) because cert_bootstrap.py reaches into certifi's internals

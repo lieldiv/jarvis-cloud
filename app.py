@@ -35,7 +35,8 @@ import subprocess
 import sys
 import time
 import webbrowser
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 # --- Resolve the app's real "home" directory and make it the working
 # directory, BEFORE any other local import runs --------------------------
@@ -178,6 +179,29 @@ MAX_HISTORY_MESSAGES = 24    # ~12 user/assistant turns of memory
 # has 6 args) — the JSON got cut off mid-object, which Groq reports back as
 # a 400 "tool_use_failed" instead of just truncating gracefully.
 MAX_TOKENS = 1024
+
+# The model has no built-in notion of "now" — without this it either guesses
+# a date or, worse, takes the user's spoken clock time (their local time) and
+# stamps it with a 'Z' (UTC) suffix unchanged, silently shifting every
+# calendar event by the local UTC offset. Injected fresh into every request
+# in run_llm() below rather than baked into the static SYSTEM_PROMPT.
+LOCAL_TZ = ZoneInfo(os.environ.get("JARVIS_TIMEZONE", "Asia/Jerusalem"))
+
+
+def _time_context() -> str:
+    now = datetime.now(LOCAL_TZ)
+    offset = now.strftime("%z")  # e.g. "+0300"
+    offset = f"{offset[:3]}:{offset[3:]}"  # -> "+03:00"
+    return (
+        f"Current date and time: {now.strftime('%A, %d %B %Y, %H:%M')} "
+        f"({LOCAL_TZ.key}, UTC{offset}). Resolve relative dates/times ('today', "
+        "'tomorrow', 'in 2 hours', 'next Tuesday') against this. When calling "
+        "create_calendar_event, write start_iso/end_iso as local wall-clock time "
+        f"with this exact offset, e.g. '2026-08-05T14:00:00{offset}' for 2pm — "
+        "never convert to UTC/'Z' yourself, the offset above already tells the "
+        "calendar which zone that clock time is in."
+    )
+
 
 # Multi-user build: one history per signed-in user, keyed by their Google
 # account id. In-memory (not in users.db) — losing chat history on a server
@@ -729,7 +753,8 @@ TOOLS = [
             "description": (
                 "Propose creating a calendar event. This does NOT create it immediately — "
                 "it registers a confirmation request the user must approve. Use ISO 8601 "
-                "datetimes, e.g. '2026-08-04T15:00:00Z'."
+                "datetimes with the local UTC offset given in the current-time system "
+                "message (e.g. '2026-08-05T14:00:00+03:00') — do not convert to 'Z'/UTC."
             ),
             "parameters": {
                 "type": "object",
@@ -997,7 +1022,10 @@ def run_llm(user_text: str, user_id: str) -> str:
     history = _history_for(user_id)
     tool_impl = _build_tool_impl(user_id)
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": _time_context()},
+    ]
     messages.extend(history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": user_text})
 
