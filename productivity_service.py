@@ -38,17 +38,6 @@ logger = logging.getLogger("jarvis.productivity")
 # UTC, so a naive datetime.now() near midnight could report the wrong date).
 LOCAL_TZ = ZoneInfo(os.environ.get("JARVIS_TIMEZONE", "Asia/Jerusalem"))
 
-_HEBREW_WEEKDAYS = ["יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "שבת", "יום ראשון"]
-_HEBREW_WEEKDAYS_SHORT = ["יום ב׳", "יום ג׳", "יום ד׳", "יום ה׳", "יום ו׳", "שבת", "יום א׳"]
-_HEBREW_MONTHS = [
-    "בינואר", "בפברואר", "במרץ", "באפריל", "במאי", "ביוני",
-    "ביולי", "באוגוסט", "בספטמבר", "באוקטובר", "בנובמבר", "בדצמבר",
-]
-
-
-def _hebrew_date_label(dt: datetime) -> str:
-    return f"{_HEBREW_WEEKDAYS[dt.weekday()]}, {dt.day} {_HEBREW_MONTHS[dt.month - 1]}"
-
 
 def any_calendar_configured() -> bool:
     return google_service.CONFIGURED or microsoft_service.CONFIGURED
@@ -96,7 +85,7 @@ def _format_time(iso_str: str) -> str:
         return "?"
     try:
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00")).astimezone(LOCAL_TZ)
-        return f"{_HEBREW_WEEKDAYS_SHORT[dt.weekday()]} {dt.strftime('%H:%M')}"
+        return dt.strftime("%a %H:%M")
     except ValueError:
         return iso_str
 
@@ -104,9 +93,9 @@ def _format_time(iso_str: str) -> str:
 def get_calendar_events_text(user_id: str, days_ahead: float = 1, max_results: int = 15) -> str:
     events = _collect_events(user_id, days_ahead, max_results)
     if events is None:
-        return "אין יומן מחובר, אדוני — אנא התחבר קודם."
+        return "No calendar is connected, sir — please sign in first."
     if not events:
-        return "אין כלום ביומן בטווח הזה, אדוני."
+        return "Nothing on the calendar in that window, sir."
 
     lines = []
     for e in events:
@@ -152,9 +141,9 @@ def _collect_emails(user_id: str, unread_only: bool, max_results: int):
 def get_emails_text(user_id: str, unread_only: bool = True, max_results: int = 8) -> str:
     emails = _collect_emails(user_id, unread_only, max_results)
     if emails is None:
-        return "אין תיבת דואר מחוברת, אדוני — אנא התחבר קודם."
+        return "No mailbox is connected, sir — please sign in first."
     if not emails:
-        return "תיבת הדואר ריקה, אדוני." if unread_only else "אין הודעות אחרונות, אדוני."
+        return "Inbox is clear, sir." if unread_only else "No recent messages, sir."
 
     lines = [f"- {e['sender']}: {e['subject']} — {e['snippet'][:80]} [{e['source']}]" for e in emails]
     return "\n".join(lines)
@@ -188,11 +177,11 @@ def get_inbox_summary_spoken(emails: list) -> str:
     with markdown (there's no free-form model output to strip) and can't
     break just because a Groq key is flaky."""
     if not emails:
-        return "תיבת הדואר שלך ריקה, אדוני."
+        return "Your inbox is clear, sir."
     count = len(emails)
-    lines = [f"יש לך {count} אימיילים שלא נקראו, אדוני." if count != 1 else "יש לך אימייל אחד שלא נקרא, אדוני."]
+    lines = [f"You have {count} unread email{'s' if count != 1 else ''}, sir."]
     for e in emails[:5]:
-        lines.append(f"מאת {e['sender_name']}: {e['subject']}.")
+        lines.append(f"From {e['sender_name']}: {e['subject']}.")
     return " ".join(lines)
 
 
@@ -201,33 +190,33 @@ def get_daily_agenda_text(user_id: str) -> str:
     (so voice queries like 'what's my day look like' work any time) and by
     daily_briefing.py's scheduler (so the proactive morning brief doesn't
     spend a Groq API call it doesn't need)."""
-    today_label = _hebrew_date_label(datetime.now(LOCAL_TZ))
+    today_label = datetime.now(LOCAL_TZ).strftime("%A, %B %d")
 
     if not any_calendar_configured() and not any_mail_configured():
         return (
-            f"בוקר טוב, אדוני. היום {today_label}. "
-            "אין עדיין יומן או תיבת דואר מחוברים — ראה את קובץ ה-README כדי לחבר אחד."
+            f"Good morning, sir. Today is {today_label}. "
+            "No calendar or mailbox is connected yet — see the README to set one up."
         )
 
     events = _collect_events(user_id, days_ahead=1, max_results=15) or []
     emails = _collect_emails(user_id, unread_only=True, max_results=10) or []
 
-    parts = [f"בוקר טוב, אדוני. היום {today_label}."]
+    parts = [f"Good morning, sir. Today is {today_label}."]
 
     if events:
-        parts.append(f"יש לך {len(events)} פריטים ביומן:" if len(events) != 1 else "יש לך פריט אחד ביומן:")
+        parts.append(f"You have {len(events)} item(s) on the calendar:")
         for e in events:
-            where = f" ב{e['location']}" if e.get("location") else ""
+            where = f" at {e['location']}" if e.get("location") else ""
             parts.append(f"  {_format_time(e['start'])} — {e['summary']}{where}")
     elif any_calendar_configured():
-        parts.append("אין כלום ביומן היום.")
+        parts.append("Nothing on the calendar today.")
 
     if emails:
-        parts.append(f"יש {len(emails)} אימיילים שלא נקראו, כולל:" if len(emails) != 1 else "יש אימייל אחד שלא נקרא:")
+        parts.append(f"There are {len(emails)} unread email(s), including:")
         for e in emails[:5]:
-            parts.append(f"  מאת {e['sender']}: {e['subject']}")
+            parts.append(f"  from {e['sender']}: {e['subject']}")
     elif any_mail_configured():
-        parts.append("תיבת הדואר ריקה.")
+        parts.append("Inbox is clear.")
 
     return "\n".join(parts)
 
@@ -251,7 +240,7 @@ def request_create_calendar_event(user_id: str, summary: str, start_iso: str, en
                                    provider: str = "auto") -> dict:
     target = _pick_calendar_provider(provider)
     if target == "none":
-        return {"status": "refused", "message": "אין יומן מחובר, אדוני — אנא התחבר קודם."}
+        return {"status": "refused", "message": "No calendar is connected, sir — please sign in first."}
 
     if target == "google":
         impl = google_service.create_calendar_event
@@ -260,7 +249,7 @@ def request_create_calendar_event(user_id: str, summary: str, start_iso: str, en
         impl = microsoft_service.create_calendar_event
         cb_args = (summary, start_iso, end_iso, description, location)
 
-    description_text = f"יצירת אירוע ביומן '{summary}' ({start_iso} - {end_iso}) ב-{target.title()}"
+    description_text = f"Create calendar event '{summary}' ({start_iso} - {end_iso}) on {target.title()}"
     token = request_confirmation(
         description_text, impl, *cb_args,
         meta={"kind": "calendar_event", "provider": target, "user_id": user_id},
@@ -289,7 +278,7 @@ def edit_pending_calendar_event(token: str, summary: str, start_iso: str, end_is
     proposal — same failure mode as approving/denying a stale token."""
     meta = get_pending_meta(token)
     if not meta or meta.get("kind") != "calendar_event":
-        return {"status": "error", "message": "האישור הזה כבר פג תוקף או שאינו קיים, אדוני."}
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
 
     target = meta["provider"]
     if target == "google":
@@ -297,9 +286,9 @@ def edit_pending_calendar_event(token: str, summary: str, start_iso: str, end_is
     else:
         cb_args = (summary, start_iso, end_iso, description, location)
 
-    description_text = f"יצירת אירוע ביומן '{summary}' ({start_iso} - {end_iso}) ב-{target.title()}"
+    description_text = f"Create calendar event '{summary}' ({start_iso} - {end_iso}) on {target.title()}"
     if not update_pending(token, cb_args, description_text):
-        return {"status": "error", "message": "האישור הזה כבר פג תוקף או שאינו קיים, אדוני."}
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
 
     return {
         "status": "ok", "token": token, "message": description_text,
@@ -325,7 +314,7 @@ def _pick_mail_provider(provider: str) -> str:
 def request_send_email(user_id: str, to: str, subject: str, body: str, provider: str = "auto") -> dict:
     target = _pick_mail_provider(provider)
     if target == "none":
-        return {"status": "refused", "message": "אין תיבת דואר מחוברת, אדוני — אנא התחבר קודם."}
+        return {"status": "refused", "message": "No mailbox is connected, sir — please sign in first."}
 
     if target == "google":
         impl = google_service.send_email
@@ -334,7 +323,7 @@ def request_send_email(user_id: str, to: str, subject: str, body: str, provider:
         impl = microsoft_service.send_email
         cb_args = (to, subject, body)
 
-    description_text = f"שליחת אימייל אל {to}: '{subject}' דרך {target.title()}"
+    description_text = f"Send email to {to}: '{subject}' via {target.title()}"
     token = request_confirmation(
         description_text, impl, *cb_args,
         meta={"kind": "email", "provider": target, "user_id": user_id},
@@ -351,7 +340,7 @@ def edit_pending_email(token: str, to: str, subject: str, body: str) -> dict:
     proposal — swaps the stored args so approval sends the corrected message."""
     meta = get_pending_meta(token)
     if not meta or meta.get("kind") != "email":
-        return {"status": "error", "message": "האישור הזה כבר פג תוקף או שאינו קיים, אדוני."}
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
 
     target = meta["provider"]
     if target == "google":
@@ -359,9 +348,9 @@ def edit_pending_email(token: str, to: str, subject: str, body: str) -> dict:
     else:
         cb_args = (to, subject, body)
 
-    description_text = f"שליחת אימייל אל {to}: '{subject}' דרך {target.title()}"
+    description_text = f"Send email to {to}: '{subject}' via {target.title()}"
     if not update_pending(token, cb_args, description_text):
-        return {"status": "error", "message": "האישור הזה כבר פג תוקף או שאינו קיים, אדוני."}
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
 
     return {
         "status": "ok", "token": token, "message": description_text,

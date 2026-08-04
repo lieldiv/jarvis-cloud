@@ -215,8 +215,10 @@ def _history_for(user_id: str) -> list:
 
 SYSTEM_PROMPT = (
     "You are J.A.R.V.I.S., Tony Stark's AI assistant. Respond in concise, "
-    "polished Hebrew (עברית), and address the user as 'אדוני'. Keep answers "
-    "under 30 words unless the user clearly asks for detail.\n\n"
+    "polished British English, and address the user as 'sir'. Keep answers "
+    "under 30 words unless the user clearly asks for detail. The user may "
+    "speak or type to you in Hebrew — understand it, but always reply in "
+    "English.\n\n"
     "Your central job is managing the user's schedule and inbox — treat "
     "get_daily_agenda, get_calendar_events, and list_emails as your default "
     "tools whenever the user asks anything about their day, what's coming "
@@ -225,7 +227,7 @@ SYSTEM_PROMPT = (
     "sending an email (create_calendar_event, send_email), but these only "
     "ever register a confirmation request — you cannot act on the user's "
     "calendar or mailbox without them explicitly approving it afterward. "
-    "Always phrase these as offers (e.g. 'להוסיף את זה, אדוני?'), never as "
+    "Always phrase these as offers ('Shall I add that, sir?'), never as "
     "already-done.\n\n"
     "Beyond that, you are a general-purpose agent for whatever the user "
     "needs. For Spotify specifically, ALWAYS use play_on_spotify to play or "
@@ -354,12 +356,12 @@ def _open_via_start_menu(app_name: str) -> bool:
 def open_application(app_name: str) -> str:
     raw_name = (app_name or "").strip()
     if not raw_name:
-        return "איזה יישום לפתוח, אדוני?"
+        return "Which application should I open, sir?"
     key = raw_name.lower()
     matched_name, entry = _fuzzy_lookup(key, APP_MAP)
 
     if not DESKTOP_TOOLS_ENABLED:
-        return "אני לא יכול לפתוח יישומי שולחן עבודה מכאן, אדוני — זו הגרסה בענן, אין מחשב Windows שאני יכול לשלוט בו."
+        return "I can't open desktop applications from here, sir — this is the cloud-hosted build, there's no Windows desktop for me to control."
 
     if entry:
         try:
@@ -369,7 +371,7 @@ def open_application(app_name: str) -> str:
                 subprocess.Popen([entry["target"]], shell=False)
             elif entry["type"] == "startfile" and hasattr(os, "startfile"):
                 os.startfile(entry["target"])  # Windows-only, no shell parsing
-            return f"פותח את {matched_name}, אדוני."
+            return f"Opening {matched_name}, sir."
         except Exception as e:
             logger.warning(f"Mapped launch failed for '{matched_name}', falling back to Start-menu search: {e}")
 
@@ -377,21 +379,21 @@ def open_application(app_name: str) -> str:
     # search handles essentially every installed app without us needing to
     # know its exe name or install path ahead of time.
     if _open_via_start_menu(raw_name):
-        return f"פותח את {raw_name}, אדוני."
+        return f"Opening {raw_name}, sir."
 
     if not hasattr(os, "startfile"):
-        return f"לא הצלחתי להפעיל את {raw_name}, אדוני."
+        return f"I couldn't launch {raw_name}, sir."
     try:
         os.startfile(raw_name)
-        return f"מנסה להפעיל את {raw_name}, אדוני."
+        return f"Attempting to launch {raw_name}, sir."
     except Exception as e:
         logger.error(f"Failed to open '{raw_name}': {e}")
-        return f"לא הצלחתי להפעיל את {raw_name}, אדוני."
+        return f"I couldn't launch {raw_name}, sir."
 
 
 def close_application(app_name: str) -> str:
     if not DESKTOP_TOOLS_ENABLED:
-        return "אני לא יכול לסגור יישומי שולחן עבודה מכאן, אדוני — זו הגרסה בענן, אין מחשב Windows שאני יכול לשלוט בו."
+        return "I can't close desktop applications from here, sir — this is the cloud-hosted build, there's no Windows desktop for me to control."
 
     raw_name = (app_name or "").strip()
     key = raw_name.lower()
@@ -400,40 +402,40 @@ def close_application(app_name: str) -> str:
     try:
         if exe:
             subprocess.run(["taskkill", "/f", "/im", exe], capture_output=True, timeout=5)
-            return f"סגרתי את {matched_name}, אדוני."
+            return f"Closed {matched_name}, sir."
 
         if pyautogui:
             pyautogui.hotkey("alt", "f4")
-            return "סוגר את החלון הפעיל, אדוני."
+            return "Closing the active window, sir."
 
-        return f"אין לי דרך לסגור את '{raw_name}' במערכת הזו, אדוני."
+        return f"I don't have a way to close '{raw_name}' on this system, sir."
     except Exception as e:
         logger.error(f"Failed to close '{raw_name}': {e}")
-        return f"לא הצלחתי לסגור את {raw_name}, אדוני."
+        return f"I couldn't close {raw_name}, sir."
 
 
 def web_search(query: str) -> str:
     query = (query or "").strip()
     if not query:
-        return "מה תרצה שאחפש, אדוני?"
+        return "What would you like me to search for, sir?"
     webbrowser.open(f"https://www.google.com/search?q={requests.utils.quote(query)}")
-    return f"מחפש ב-Google את {query}, אדוני."
+    return f"Searching Google for {query}, sir."
 
 
 def play_media(query: str) -> str:
     query = (query or "").strip()
     if not query:
-        return "מה תרצה שאנגן, אדוני?"
+        return "What would you like me to play, sir?"
     if pywhatkit:
         try:
             pywhatkit.playonyt(query)
-            return f"מנגן את {query} ב-YouTube, אדוני."
+            return f"Playing {query} on YouTube, sir."
         except Exception as e:
             logger.warning(f"pywhatkit failed for '{query}': {e}")
     # Fallback: pywhatkit missing or it failed (it's known to be flaky) —
     # open search results instead of failing silently.
     webbrowser.open(f"https://www.youtube.com/results?search_query={requests.utils.quote(query)}")
-    return f"פתחתי תוצאות חיפוש ל-{query} ב-YouTube, אדוני."
+    return f"I've opened YouTube results for {query}, sir."
 
 
 _spotify_client = None
@@ -471,17 +473,17 @@ def get_spotify_client():
 def play_on_spotify(query: str) -> str:
     query = (query or "").strip()
     if not query:
-        return "מה תרצה שאנגן ב-Spotify, אדוני?"
+        return "What should I play on Spotify, sir?"
 
     sp = get_spotify_client()
     if not sp:
-        return "Spotify עדיין לא מוגדר, אדוני — הוסף את פרטי ה-API שלך ל-.env."
+        return "Spotify isn't configured yet, sir — add your API credentials to .env."
 
     try:
         results = sp.search(q=query, type="track", limit=1)
         tracks = results.get("tracks", {}).get("items", [])
         if not tracks:
-            return f"לא מצאתי את '{query}' ב-Spotify, אדוני."
+            return f"I couldn't find '{query}' on Spotify, sir."
 
         track = tracks[0]
         track_name = track["name"]
@@ -496,26 +498,26 @@ def play_on_spotify(query: str) -> str:
             devices = sp.devices().get("devices", [])
 
         if not devices:
-            return "לא מצאתי מכשיר Spotify פעיל, אדוני. אנא פתח את Spotify קודם."
+            return "I couldn't find an active Spotify device, sir. Please open Spotify first."
 
         sp.start_playback(device_id=devices[0]["id"], uris=[track["uri"]])
-        return f"מנגן את {track_name} של {artist_name} ב-Spotify, אדוני."
+        return f"Playing {track_name} by {artist_name} on Spotify, sir."
 
     except spotipy.exceptions.SpotifyException as e:
         logger.error(f"Spotify playback error: {e}")
         if getattr(e, "http_status", None) == 403:
-            return "שליטה בנגינה ב-Spotify דורשת חשבון Premium, אדוני."
-        return "נתקלתי בבעיה בשליטה על Spotify, אדוני."
+            return "Spotify playback control needs a Premium account, sir."
+        return "I ran into a problem controlling Spotify, sir."
     except Exception as e:
         logger.error(f"Spotify error: {e}")
-        return "נתקלתי בבעיה בהתחברות ל-Spotify, אדוני."
+        return "I ran into a problem reaching Spotify, sir."
 
 
 def draw_shape_in_paint(shape: str = "circle", size: str = "medium") -> str:
     if not pyautogui:
-        return "אוטומציית ציור לא זמינה במערכת הזו, אדוני."
+        return "Drawing automation isn't available on this system, sir."
     if shape.lower() not in ("circle", "ellipse", "oval"):
-        return f"אני יכול כרגע לצייר רק עיגולים ב-Paint, אדוני — לא {shape}."
+        return f"I can currently only draw circles in Paint, sir — not {shape}."
 
     try:
         open_application("paint")
@@ -549,10 +551,10 @@ def draw_shape_in_paint(shape: str = "circle", size: str = "medium") -> str:
         pyautogui.dragTo(end_x, end_y, duration=0.6, button="left")
         pyautogui.keyUp("shift")
 
-        return "ציירתי עיגול ב-Paint, אדוני."
+        return "I've drawn a circle in Paint, sir."
     except Exception as e:
         logger.error(f"Paint drawing failed: {e}")
-        return "נתקלתי בבעיה בציור ב-Paint, אדוני."
+        return "I ran into a problem drawing in Paint, sir."
 
 
 # Safe arithmetic evaluator for the calculator tool. Deliberately NOT using
@@ -584,14 +586,14 @@ def _format_number(n):
 def calculate(expression: str) -> str:
     expression = (expression or "").strip()
     if not expression:
-        return "מה תרצה שאחשב, אדוני?"
+        return "What would you like me to calculate, sir?"
     try:
         result = _safe_eval(ast.parse(expression, mode="eval").body)
     except ZeroDivisionError:
-        return "זו חלוקה באפס, אדוני."
+        return "That's a division by zero, sir."
     except Exception as e:
         logger.warning(f"Calculate failed for '{expression}': {e}")
-        return f"לא הצלחתי לחשב '{expression}', אדוני."
+        return f"I couldn't compute '{expression}', sir."
 
     # Also type it into the real Calculator app so it's visible on screen —
     # Windows Calculator accepts full keyboard input, so no coordinate
@@ -605,7 +607,7 @@ def calculate(expression: str) -> str:
         except Exception as e:
             logger.warning(f"Couldn't type into Calculator: {e}")
 
-    return f"{expression} שווה ל-{_format_number(result)}, אדוני."
+    return f"{expression} equals {_format_number(result)}, sir."
 
 
 # JSON-schema tool definitions handed to the model. Groq's function-calling
@@ -887,8 +889,8 @@ def _write_and_test_code(args):
         on_attempt=event_stream.push_event,
     )
     if outcome["success"]:
-        return f"הצלחתי אחרי {outcome['attempts']} ניסיונות, אדוני. פלט: {outcome['stdout'][:300]}"
-    return f"לא הצלחתי לגרום לזה לעבוד אחרי {outcome['attempts']} ניסיונות, אדוני. השגיאה האחרונה: {outcome['stderr'][-300:]}"
+        return f"Succeeded after {outcome['attempts']} attempt(s), sir. Output: {outcome['stdout'][:300]}"
+    return f"Couldn't get it working after {outcome['attempts']} attempts, sir. Last error: {outcome['stderr'][-300:]}"
 
 
 def _delete_workspace_path(args):
@@ -897,7 +899,7 @@ def _delete_workspace_path(args):
         event_stream.push_event({
             "type": "confirmation_required", "token": result["token"], "message": result["message"],
         })
-        return f"אנא אשר, אדוני: {result['message']} (טוקן {result['token']})"
+        return f"Please confirm, sir: {result['message']} (token {result['token']})"
     return result["message"]
 
 
@@ -916,7 +918,7 @@ def _create_calendar_event(user_id, args):
             "type": "confirmation_required", "token": result["token"], "message": result["message"],
             "kind": result.get("kind", "generic"), "details": result.get("details"),
         })
-        return f"הכנתי את '{args.get('summary', '')}' לאישורך, אדוני — בדוק ב-HUD."
+        return f"I've drawn up '{args.get('summary', '')}' for your approval, sir — check the HUD."
     return result["message"]
 
 
@@ -933,7 +935,7 @@ def _send_email(user_id, args):
             "type": "confirmation_required", "token": result["token"], "message": result["message"],
             "kind": result.get("kind", "generic"), "details": result.get("details"),
         })
-        return f"הכנתי את האימייל הזה לאישורך, אדוני — בדוק ב-HUD."
+        return f"I've drawn up that email for your approval, sir — check the HUD."
     return result["message"]
 
 
@@ -1051,7 +1053,7 @@ def run_llm(user_text: str, user_id: str) -> str:
                     result = impl(args) if impl else f"Unknown tool '{fn_name}'."
                 except Exception as e:
                     logger.error(f"Tool '{fn_name}' raised: {e}")
-                    result = f"הפעולה '{fn_name}' נתקלה בבעיה בלתי צפויה ולא הושלמה, אדוני."
+                    result = f"The '{fn_name}' action ran into an unexpected problem and didn't complete, sir."
                 logger.info(f"tool call: {fn_name}({args}) -> {result}")
 
                 messages.append(
@@ -1064,18 +1066,18 @@ def run_llm(user_text: str, user_id: str) -> str:
                 )
 
         if not final_text:
-            final_text = "בוצע, אדוני."
+            final_text = "Done, sir."
         final_text = _strip_markdown(final_text)
 
     except RateLimitError as e:
         logger.error(f"Groq rate limit hit: {e}")
-        return "הגעתי למכסת השימוש שלי ב-Groq לעת עתה, אדוני — נסה שוב בעוד כמה דקות, או שנצטרך לעבור לתוכנית בתשלום."
+        return "I've hit my usage limit with Groq for now, sir — give it a few minutes, or we may need to move to a paid tier."
     except APIConnectionError as e:
         logger.error(f"Groq connection error: {e}")
-        return "אני לא מצליח להתחבר ל-Groq כרגע, אדוני — בדוק את חיבור האינטרנט."
+        return "I can't reach Groq right now, sir — check the internet connection."
     except Exception as e:
         logger.error(f"LLM error: {e}")
-        return "שגיאת חיבור נוירונית, אדוני."
+        return "Neural connection error, sir."
 
     history.append({"role": "user", "content": user_text})
     history.append({"role": "assistant", "content": final_text})
@@ -1165,13 +1167,13 @@ def google_auth_callback():
 def process_command():
     user_id = session.get("user_id")
     if not user_id:
-        return jsonify({"response": "אנא התחבר קודם, אדוני.", "audio": None}), 401
+        return jsonify({"response": "Please sign in first, sir.", "audio": None}), 401
 
     data = request.json or {}
     text = (data.get("command") or "").strip()
 
     if not text:
-        return jsonify({"response": "ממתין לפקודה, אדוני.", "audio": None})
+        return jsonify({"response": "Standing by, sir.", "audio": None})
 
     response_text = run_llm(text, user_id)
     audio_b64 = asyncio.run(generate_tts_base64(response_text))
@@ -1255,10 +1257,10 @@ def speak():
 def inbox():
     user_id = session.get("user_id")
     if not user_id:
-        return jsonify({"configured": False, "emails": [], "summary": "אנא התחבר קודם, אדוני."})
+        return jsonify({"configured": False, "emails": [], "summary": "Please sign in first, sir."})
     emails = productivity_service.get_inbox_structured(user_id, max_results=8)
     if emails is None:
-        return jsonify({"configured": False, "emails": [], "summary": "אין תיבת דואר מחוברת, אדוני."})
+        return jsonify({"configured": False, "emails": [], "summary": "No mailbox is connected, sir."})
     summary = productivity_service.get_inbox_summary_spoken(emails)
     return jsonify({"configured": True, "emails": emails, "summary": summary})
 
@@ -1266,24 +1268,24 @@ def inbox():
 @app.route("/api/inbox/draft-reply", methods=["POST"])
 def inbox_draft_reply():
     data = request.json or {}
-    sender_name = (data.get("sender_name") or "השולח").strip()
+    sender_name = (data.get("sender_name") or "the sender").strip()
     subject = (data.get("subject") or "").strip()
     snippet = (data.get("snippet") or "").strip()
     instructions = (data.get("instructions") or "").strip()
     if not instructions:
-        return jsonify({"error": "מה תרצה לכתוב, אדוני?"}), 400
+        return jsonify({"error": "What would you like to say, sir?"}), 400
 
     prompt = (
         f"Original email — From: {sender_name}. Subject: {subject}. Preview: {snippet}\n\n"
         f"What the user wants to say in reply: {instructions}\n\n"
-        "Write ONLY the reply email body as plain text, in Hebrew. No subject line, "
-        "no markdown, no placeholders like [שמך] — keep it concise and polite."
+        "Write ONLY the reply email body as plain text. No subject line, no markdown, "
+        "no placeholders like [Your Name] — keep it concise and polite."
     )
     try:
         completion = groq_client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You draft concise, polite plain-text email replies in Hebrew for J.A.R.V.I.S., an assistant. Output only the email body, nothing else."},
+                {"role": "system", "content": "You draft concise, polite plain-text email replies for J.A.R.V.I.S., an assistant. Output only the email body, nothing else."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5, max_tokens=400,
@@ -1291,10 +1293,10 @@ def inbox_draft_reply():
         draft = _strip_markdown(completion.choices[0].message.content or "").strip()
         return jsonify({"draft": draft})
     except RateLimitError:
-        return jsonify({"error": "הגעתי למכסת השימוש שלי ב-Groq לעת עתה, אדוני — נסה שוב בעוד כמה דקות."}), 429
+        return jsonify({"error": "I've hit my usage limit with Groq for now, sir — give it a few minutes."}), 429
     except Exception as e:
         logger.error(f"Draft-reply failed: {e}")
-        return jsonify({"error": "לא הצלחתי לנסח את התשובה, אדוני."}), 500
+        return jsonify({"error": "I couldn't draft that reply, sir."}), 500
 
 
 @app.route("/api/inbox/send-reply", methods=["POST"])
@@ -1304,11 +1306,11 @@ def inbox_send_reply():
     subject = (data.get("subject") or "").strip()
     body = (data.get("body") or "").strip()
     if not to or not body:
-        return jsonify({"error": "חסר נמען או תוכן ההודעה."}), 400
+        return jsonify({"error": "Missing recipient or message body."}), 400
 
     user_id = session.get("user_id")
     if not user_id:
-        return jsonify({"error": "אנא התחבר קודם, אדוני."}), 401
+        return jsonify({"error": "Please sign in first, sir."}), 401
 
     reply_subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
     # Same confirm-gated path every other write in this app uses — this

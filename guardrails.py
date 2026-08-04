@@ -188,7 +188,7 @@ def resolve_confirmation(token: str, approve: bool) -> str:
     _purge_expired()
     entry = _PENDING.pop(token, None)
     if entry is None:
-        return "האישור הזה כבר פג תוקף או שאינו קיים, אדוני."
+        return "That confirmation has expired or doesn't exist, sir."
     if not approve:
         return f"Cancelled: {entry['description']}"
     try:
@@ -200,7 +200,7 @@ def resolve_confirmation(token: str, approve: bool) -> str:
         # expired-token stack trace, etc.) would otherwise get read aloud
         # verbatim right after the user approved the action.
         logger.error(f"Confirmed action failed: {e}")
-        return f"הפעולה נכשלה אחרי שאישרת אותה, אדוני — {entry['description']} לא בוצעה. אנא נסה שוב."
+        return f"That action failed after you approved it, sir — {entry['description']} didn't go through. Please try again."
 
 
 # Processes that must never be killed even with confirmation — the confirm

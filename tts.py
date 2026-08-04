@@ -14,20 +14,12 @@ import edge_tts
 
 logger = logging.getLogger("jarvis.tts")
 
-VOICE = "he-IL-AvriNeural"  # run `edge-tts --list-voices` to see others (he-IL-HilaNeural is the female alternative)
-
-# A few percent slower than the model's default pace reads as measured and
-# formal (the "butler" cadence the en-GB-RyanNeural persona had) rather than
-# the clipped, slightly rushed default. Deliberately NOT touching pitch —
-# shifting pitch is a DSP transform bolted onto the synthesized audio rather
-# than a genuinely different voice, and pushing it tends to make neural TTS
-# sound *more* robotic/artificial, the opposite of what we want here.
-RATE = "-8%"
+VOICE = "en-GB-RyanNeural"  # run `edge-tts --list-voices` to see others
 
 
-async def generate_tts_base64(text: str, voice: str = VOICE, rate: str = RATE):
+async def generate_tts_base64(text: str, voice: str = VOICE):
     try:
-        communicate = edge_tts.Communicate(text, voice, rate=rate)
+        communicate = edge_tts.Communicate(text, voice)
         audio_bytes = b""
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":

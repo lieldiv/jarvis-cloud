@@ -775,7 +775,7 @@
         function continueWithTextOnly() {
             textOnlyMode = true;
             document.getElementById('mic-gate').classList.remove('show');
-            addLog('SYS: קלט קולי לא זמין בדפדפן הזה — הקלד פקודות בתיבה למטה במקום זאת.', 'sys');
+            addLog('SYS: Voice input isn\'t available in this browser — type commands in the box below instead.', 'sys');
             isAwake = true;
             setHudState('LISTENING');
             document.getElementById('status-text').innerText = 'TEXT MODE — VOICE UNAVAILABLE';
@@ -820,7 +820,7 @@
                 gate.classList.remove('show');
                 document.getElementById('google-account-ctrl').style.display = 'flex';
                 if (authResult === 'ok') {
-                    addLog('SYS: חשבון Google מחובר — ניתנה גישה ליומן, Gmail ו-Drive.', 'sys');
+                    addLog('SYS: Google account connected — Calendar, Gmail and Drive access granted.', 'sys');
                 }
                 showMicCheckModal();
                 return;
@@ -858,7 +858,7 @@
         // 20s so it's obvious it's just waiting, not broken or ignoring you.
         setInterval(() => {
             if (micInitialized && !isAwake) {
-                showHologram('אמור "WAKE UP" כדי להתחיל, אדוני.');
+                showHologram('Say "WAKE UP" to begin, sir.');
             }
         }, 20000);
 
@@ -990,7 +990,7 @@
 
             recognition.onerror = (event) => {
                 if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    addLog('SYS: הגישה למיקרופון חסומה. אפשר אותה בהגדרות הדפדפן, או פשוט השתמש בתיבת הטקסט למטה.', 'sys');
+                    addLog('SYS: Microphone access blocked. Allow it in your browser settings, or just use the text input below.', 'sys');
                 } else if (event.error !== 'no-speech') {
                     console.log('Speech error:', event.error);
                 }
@@ -1038,7 +1038,7 @@
                     setHudState('LISTENING');
                 }
             } catch (err) {
-                addLog('SYS: כשל בחיבור הנוירוני.', 'sys');
+                addLog('SYS: Neural connection failure.', 'sys');
                 setHudState('LISTENING');
             }
         }
@@ -1219,7 +1219,7 @@
                 pendingConfirmEvt = { ...evt, details: data.details, message: data.message };
                 exitConfirmEditMode();
             } catch (err) {
-                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לשמור את השינוי.', 'sys');
+                addLog('SYS: Could not reach the server to save that edit.', 'sys');
             }
         }
 
@@ -1239,7 +1239,7 @@
             const deny = /\b(no|cancel|deny|stop|don't)\b/.test(text) ||
                 text.includes('לא') || text.includes('בטל') || text.includes('ביטול');
             if (!approve && !deny) {
-                addLog('J.A.R.V.I.S: אמור "כן" לאישור או "לא" לביטול, אדוני — או השתמש בכפתורים על המסך.', 'jarvis');
+                addLog('J.A.R.V.I.S: Please say "yes" to confirm or "no" to cancel, sir — or use the buttons on screen.', 'jarvis');
                 return;
             }
             resolveConfirmation(approve);
@@ -1268,7 +1268,7 @@
                     setHudState('LISTENING');
                 }
             } catch (err) {
-                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לטפל באישור הזה.', 'sys');
+                addLog('SYS: Could not reach the server to resolve that confirmation.', 'sys');
                 setHudState('LISTENING');
             }
         }
@@ -1448,7 +1448,7 @@
                     addLog(`SYS: ${data.message || 'Could not prepare that reply.'}`, 'sys');
                 }
             } catch (err) {
-                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לשלוח את התשובה.', 'sys');
+                addLog('SYS: Could not reach the server to send that reply.', 'sys');
             }
         }
 
@@ -1503,7 +1503,7 @@
             isAwake = false;
             if (currentAudio) currentAudio.pause();
             setHudState('SLEEPING');
-            addLog('SYS: JARVIS במצב המתנה. אמור "WAKE UP" כדי להתחיל.', 'sys');
+            addLog('SYS: JARVIS standby mode. Say "WAKE UP" to start.', 'sys');
             document.getElementById('holo-screen').style.display = 'none';
         }
 
@@ -1529,10 +1529,10 @@
         async function resetMemory() {
             try {
                 await fetch('/api/reset', { method: 'POST' });
-                addLog('SYS: זיכרון השיחה נוקה.', 'sys');
+                addLog('SYS: Conversation memory cleared.', 'sys');
                 showHologram('Memory cleared, sir.');
             } catch (err) {
-                addLog('SYS: ניקוי הזיכרון נכשל.', 'sys');
+                addLog('SYS: Failed to clear memory.', 'sys');
             }
         }
 
