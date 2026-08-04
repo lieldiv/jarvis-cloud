@@ -167,9 +167,13 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # llama-3.3-70b-versatile (used in the original script) was deprecated by Groq
 # on 2026-06-17 and is scheduled to shut down soon after. openai/gpt-oss-120b is
-# Groq's recommended replacement and supports tool calling. Swap to
-# "openai/gpt-oss-20b" instead if you want faster/cheaper responses.
-MODEL_NAME = "openai/gpt-oss-120b"
+# Groq's recommended replacement and supports tool calling, but its free-tier
+# rate limit is tight enough that a handful of commands in quick succession
+# (each already 2-3 Groq calls internally — see MAX_TOOL_ROUNDS) exhausts it
+# fast. openai/gpt-oss-20b is faster and gets a much more generous free-tier
+# budget, at a small capability cost this assistant's fairly simple
+# tool-calling/conversation use case doesn't really need the 120b for.
+MODEL_NAME = "openai/gpt-oss-20b"
 
 MAX_TOOL_ROUNDS = 3          # safety cap on chained tool calls per request
 MAX_HISTORY_MESSAGES = 24    # ~12 user/assistant turns of memory
