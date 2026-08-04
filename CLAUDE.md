@@ -1,103 +1,167 @@
-# J.A.R.V.I.S — Claude Code notes
+# J.A.R.V.I.S — Cloud multi-user fork — Claude Code notes
 
-Voice personal assistant. Three pillars, in priority order:
-1. **Schedule/email management is the central use case** — calendar + inbox, not a side feature.
-2. Conversational voice assistant (Groq LLM + edge-tts, browser HUD in [templates/index.html](templates/index.html)).
-3. Flexible general-purpose agent (open/close apps, web search, Spotify, Paint drawing, calculator, computer-use vision, code writing, file tools).
+Multi-user cloud voice assistant, deployed at **https://jarvis-cloud-oifj.onrender.com**
+(Render free tier). Anyone with a Google account added as a Test user can sign
+in from a phone or computer browser and get their own calendar/inbox/voice
+assistant. Two pillars remain from the original single-user app; the third
+(desktop automation) is intentionally out of scope here — there's no user
+device for a cloud server to control:
 
-## ⚠️ There are TWO copies of this project on disk
+1. **Schedule/email management is the central use case** — calendar + inbox.
+2. Conversational voice assistant (Groq LLM + edge-tts, browser HUD in
+   [templates/index.html](templates/index.html)). Speech recognition
+   (`recognition.lang`) is Hebrew (`he-IL`) — the actual user speaks Hebrew —
+   but JARVIS's own replies stay English (`SYSTEM_PROMPT` says so explicitly;
+   tried full Hebrew TTS once, the two available voices — he-IL-AvriNeural/
+   HilaNeural — read as unprofessional, reverted). Wake/stop/yes-no phrase
+   matching accepts both languages since he-IL recognition isn't guaranteed
+   to transcribe English loanwords.
+3. Flexible general-purpose agent — but trimmed hard from the original: no
+   Spotify (removed — it was one server-wide shared account, not per-user
+   OAuth), no web_search/play_media (removed — both called Python's
+   `webbrowser.open()` **server-side**, which opens nothing on a remote
+   user's device; that only worked in the original single-tenant desktop
+   app because the server and the user were the same machine), no desktop
+   automation (`JARVIS_DESKTOP_TOOLS=false` on Render — `open_application`/
+   `close_application`/`computer_use` are omitted from the tool list sent to
+   Groq entirely when this is false, not just refused at call time — saves
+   tokens against the free-tier rate limit too). What's left: calculate,
+   get_weather, write_and_test_code + file tools (now per-user sandboxed,
+   see below), and the schedule/email/reminder tools.
 
-- `C:\Users\User\Desktop\jarvis_final` — where development happens.
-- `C:\Users\User\Desktop\free 400 שקל` — **the one the user actually runs day to day.**
+## ⚠️ Do not confuse this with the other two JARVIS folders
 
-They are not linked (no symlink/junction — verified). Code files get manually
-synced/copied between them; **`.env`, `.google_cache/`, `.certs/`, `.ms_cache.bin`,
-`.spotify_cache` do NOT sync automatically** (they're gitignored secrets/tokens).
-If calendar/email tools suddenly report "not connected" or the assistant
-hallucinates generic wrong instructions instead of using real tools, the first
-thing to check is **which folder the live process is actually running from**
-(`Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Select CommandLine`)
-and whether that folder's `.env`/`.google_cache` are up to date. When you change
-code, copy it to both folders (or ask the user which one to touch).
+- `C:\Users\User\Desktop\free 400 שקל` — the **single-user** desktop app the
+  user runs day to day on their own PC. Has its own separate CLAUDE.md.
+- `C:\Users\User\Desktop\jarvis_final` — where single-user development happens.
+- **This folder** (`האפליקציה הסופית`) is a **separate fork**, created
+  specifically to become a multi-tenant cloud product without touching or
+  risking the working single-user app. Code does not sync between them —
+  changes made here stay here unless explicitly asked to port them back.
 
-## Architecture
+## Deployment
 
-- [app.py](app.py) — Flask server, Groq tool-calling loop (`run_llm`), routes.
-- [tts.py](tts.py) — shared edge-tts helper (used by app.py and daily_briefing.py).
-- [cert_bootstrap.py](cert_bootstrap.py) — **must stay the first import** in any
-  module that makes HTTPS calls. This machine's antivirus/network does TLS
-  inspection with a root CA that Windows trusts but Python's `certifi` doesn't,
-  so uncovered HTTPS calls fail with `CERTIFICATE_VERIFY_FAILED`. This patches
-  `certifi.where()` + sets `SSL_CERT_FILE`/`REQUESTS_CA_BUNDLE`/`CURL_CA_BUNDLE`
-  for this process only, pointing at `.certs/combined_ca_bundle.pem`
-  (certifi's CAs + Windows' trusted roots, exported once via PowerShell — see
-  README for the regeneration snippet if it ever goes stale).
-- [google_service.py](google_service.py) / [microsoft_service.py](microsoft_service.py) —
-  Google Calendar+Gmail and Outlook/365 Graph API clients. Each has a
-  `CONFIGURED` flag (env vars present) and degrades to `None`/spoken-string
-  instead of raising when unconfigured or libs aren't installed.
-- [productivity_service.py](productivity_service.py) — merges both providers.
-  Reads go straight through. **Writes (`create_calendar_event`, `send_email`)
-  never execute directly** — they call `guardrails.request_confirmation()` and
-  return a token; nothing happens until the user approves via the HUD modal or
-  says "yes". This is the "read-only + suggestions" autonomy model — don't
-  make writes fire immediately even if it seems convenient.
-- [daily_briefing.py](daily_briefing.py) — background thread, fires once/day
-  (default 08:00, `JARVIS_BRIEFING_HOUR`/`_MINUTE`), builds the agenda with
-  **zero LLM calls** (pure string formatting) so a bad/expired Groq key can't
-  take it down, pushes it over SSE.
-- [event_stream.py](event_stream.py) — SSE pub/sub (`/api/stream`). The HUD's
-  `EventSource` handler in index.html renders `confirmation_required` as a
-  modal (`.confirm-overlay`/`.confirm-modal`) and `daily_briefing` as
-  autoplaying audio + hologram text.
-- [guardrails.py](guardrails.py) — sandboxing (`resolve_safe_path`), no-admin
-  check, and the confirm-to-act registry (`request_confirmation`/
-  `resolve_confirmation`). Every destructive/write action in the codebase
-  (file delete, process kill, calendar write, email send) goes through this.
-- [google_login.py](google_login.py) / [microsoft_login.py](microsoft_login.py) /
-  [spotify_login.py](spotify_login.py) — one-time interactive OAuth scripts,
-  run manually before first use so the browser consent doesn't block a live
-  voice command.
+- Render Blueprint: [render.yaml](render.yaml). `gunicorn app:app --workers 1
+  --threads 16`. **Exactly one worker is load-bearing** — `daily_briefing.py`'s
+  scheduler thread starts once at module import time (not gated behind
+  `if __name__ == "__main__"`, which gunicorn never executes — this was a
+  real bug: the scheduler never ran in production until fixed). More than
+  one worker would start multiple copies and double/triple-send reminders.
+  Threads=16 because each open browser tab holds one `/api/stream` (SSE)
+  connection open indefinitely; 2 threads meant two simultaneous tabs
+  exhausted the pool and hung every other request including sign-in.
+- **Free tier, deliberately** (user chose $0 over persistence): no disk, so
+  `users.db` — accounts, Google tokens, **and reminders** — is wiped on every
+  restart/spin-down (~15 min idle). A reminder set for later can silently
+  vanish if the server recycles before it fires. Real persistence needs a
+  durable store (Render's free Postgres is the not-yet-taken next step).
+- Two separate Google OAuth clients exist in the same Cloud project: a
+  "Desktop app" one (used by `free 400 שקל`, loopback-only) and a "Web
+  application" one (`GOOGLE_CLIENT_ID`/`SECRET` here, registered redirect URI
+  must exactly match the live Render URL — it changed once already when
+  Render appended a random suffix to the service name).
+- Google OAuth consent screen is in **Testing** status — only emails added
+  under Audience → Test users can sign in at all (`console.cloud.google.com/auth/audience`).
+  This is also the access-control mechanism keeping the free-tier Groq quota
+  from strangers, not just a dev inconvenience.
 
-## Known gotchas (hit these already, don't re-debug from scratch)
+## Multi-user architecture (the part that's different from the single-user app)
 
-- **`GROQ_API_KEY` is not stored anywhere persistent** (not in User/Machine env
-  vars, not originally in `.env`) — the user sets it manually per-session in
-  whatever terminal launches `app.py`. Don't assume it's recoverable; ask the
-  user rather than searching shell history (searching for secrets in history
-  files is out of scope without explicit permission — hit this exact denial
-  once already).
-- **`MAX_TOKENS` must stay generous (1024, not 200)** — gpt-oss models on Groq
-  spend tokens on a hidden "analysis" channel before the tool-call JSON, and
-  Groq counts that against `max_tokens`. Too low → truncated JSON → 400
-  `tool_use_failed`. `_complete_with_retry()` in app.py retries once on that
-  specific error, but don't shrink `MAX_TOKENS` back down.
-- **Google OAuth test mode**: the Cloud project's OAuth consent screen is in
-  "Testing" status, so only accounts added under Audience → Test users can
-  log in (`lieldiv@gmail.com` is added). Adding more Google accounts means
-  adding them there first, or publishing the app.
-- **SSL certificate errors are a recurring theme on this machine** — pip
-  installs, OAuth token exchanges, and API calls have all hit
-  `CERTIFICATE_VERIFY_FAILED` independently (different HTTP libraries don't
-  all respect the same env vars — `requests` honors `REQUESTS_CA_BUNDLE`,
-  `httplib2` doesn't). `cert_bootstrap.py` covers everything imported through
-  this project's own modules; a bare `pip install` in a fresh terminal will
-  still need `$env:PIP_CERT = "<path to .certs\combined_ca_bundle.pem>"` set
-  manually first.
-- Don't overwrite the global `certifi` package in site-packages to fix SSL
-  issues — that was explicitly denied once (affects every Python program on
-  the machine, not just JARVIS). The scoped `cert_bootstrap.py` approach is
-  the sanctioned fix.
-- No calendar-event or email **delete/edit** tools exist yet — only create.
-  Test events created during verification get left on the real calendar for
-  the user to remove manually.
+- [users.py](users.py) — SQLite (`users.db`), one row per Google account
+  (`id` = Google's `sub`), replacing the single-tenant `.google_cache/token.json`.
+  Also holds the `reminders` table.
+- [guardrails.py](guardrails.py) — `user_workspace_dir(user_id)` confines
+  `write_and_test_code`/file tools to a per-user subtree
+  (`WORKSPACE_DIR/users/<id>/`) instead of one shared folder — **this was a
+  real cross-user bug**: before the fix, any signed-in user could read/
+  overwrite/delete any other user's files. `resolve_safe_path(path, user_id=...)`
+  is now the required form for any multi-user caller.
+- [event_stream.py](event_stream.py) — SSE pub/sub, **keyed by user_id**.
+  `push_event(event, user_id)` requires the id (no silent-broadcast default)
+  — the original single-tenant version broadcast every event to every
+  connected tab, which in the multi-user build meant one user's proposed
+  calendar event/drafted email was pushed to every *other* signed-in user's
+  browser too. Fixed; `/api/stream` now subscribes per-session.
+- **Confirm-to-act ownership**: `app._confirm_owner_denial(token)` verifies
+  the requesting session's `user_id` against the token's stored
+  `meta["user_id"]` before `/api/confirm/<token>` or its `/edit` variant do
+  anything — added after the event_stream fix above, since a leaked token
+  without this check could still be acted on by the wrong person.
+  `guardrails.request_confirmation(..., meta={...})` / `update_pending_meta()`
+  carry that ownership (and, for composed emails, attachments) through edits.
+- **Reminders & weekly summary** ([daily_briefing.py](daily_briefing.py)) —
+  delivered by **email** (`google_service.send_email`, through the user's own
+  Gmail connection), not SSE — SSE only reaches a tab that's open right now,
+  which defeats the point of a reminder. One background thread, checked once
+  a minute: due reminders (`users.get_due_reminders`) get emailed and marked
+  delivered; weekly summary (`JARVIS_WEEKLY_SUMMARY`, default Sunday 08:00
+  local) emails every currently-connected user
+  (`users.list_connected_user_ids`) their week ahead.
+- **Compose Email modal** (`/api/compose/draft` + `/api/compose/send` in
+  app.py, UI in index.html) — a proper form (To/Reason/Files) instead of a
+  canned chat command. Draft asks Groq for a `SUBJECT:`/`BODY:` formatted
+  response (not JSON — more forgiving of an LLM's punctuation than strict
+  JSON parsing would be). Attachments travel as base64 inside JSON (not
+  multipart/form-data, for consistency with the rest of the API), capped at
+  `MAX_ATTACHMENTS=3` / `MAX_ATTACHMENT_BYTES=4MB` each — real limits, not
+  decorative, enforced both client-side (immediate feedback) and server-side.
+- Groq's `_time_context()` (app.py) injects the real current local date/time
+  + UTC offset into every request — without it the model either guessed
+  dates or stamped the user's spoken local time with a `Z` (UTC) suffix
+  unchanged, silently shifting every calendar event/reminder by the local
+  offset. `LOCAL_TZ` (`JARVIS_TIMEZONE` env var, default `Asia/Jerusalem`)
+  is used consistently for this, for `_format_time()`, and for the weekly
+  scheduler's fire-time calculation.
 
-## Setup / running
+## Known gotchas
 
-See [README.md](README.md) for full walkthrough (Google Cloud Console + Azure
-app registration steps, scopes, `.env` variables). Quick version:
+- **Groq free-tier rate limit is tight** — a brand-new free account
+  exhausted its quota after ~6 demo commands. Every round trip resends the
+  *entire* history + system prompt + every tool schema, and
+  `MAX_TOOL_ROUNDS` chains multiple calls per single user command. Already
+  mitigated: `MODEL_NAME="openai/gpt-oss-20b"` (not 120b — much more
+  generous free budget), `MAX_TOOL_ROUNDS=2`, `MAX_HISTORY_MESSAGES=12`,
+  and `ACTIVE_TOOLS` trims desktop-only tool schemas entirely rather than
+  just refusing them at call time. If it's still hit constantly, the actual
+  fix is Groq's paid (cheap, pay-as-you-go) tier — creating new free
+  accounts is not a real solution, confirmed by direct experience.
+- **`MAX_TOKENS` must stay generous (1024, not 200)** — gpt-oss models spend
+  tokens on a hidden "analysis" channel before the tool-call JSON, and Groq
+  counts that against `max_tokens`. Too low → truncated JSON → 400
+  `tool_use_failed`. `_complete_with_retry()` retries once on that specific
+  error, but don't shrink `MAX_TOKENS` back down.
+- **Mobile performance**: this HUD has several full-viewport
+  `backdrop-filter: blur()` layers (including the sign-in gate, visible
+  immediately on load) plus multiple simultaneous glow/rotation animations
+  — reported as a visible freeze on first paint on phone that desktop didn't
+  have. `@media (hover: none) and (pointer: coarse)` drops backdrop-filter
+  and the purely decorative animations on touch devices; desktop keeps the
+  full effect (mouse/trackpad has hover+fine pointer regardless of window
+  width).
+- **Mixed Hebrew/English text renders out of order** without `dir="auto"` —
+  the page has no `dir="rtl"`, so a Hebrew sentence with an embedded English
+  quoted term (`say "WAKE UP" or "good morning"`) visibly scrambles word
+  order. Every element that can hold this kind of mixed text needs
+  `dir="auto"` (mic-gate title, hologram display, status line, error text,
+  each dynamically-created log entry) — the browser then picks each
+  element's own direction from its first strong character.
+- **No calendar-event or email delete/edit-after-send tools exist** — only
+  create, and only *before* approval (the Compose/Inbox-reply EDIT button
+  rewrites a still-*pending* proposal, not something already sent). Test
+  events created during verification get left on the real calendar to
+  remove manually.
+- `spotify_login.py`, `SPOTIFY_*` env vars, and the `spotipy` dependency are
+  gone from this fork entirely (removed, not just disabled) — don't
+  reintroduce references to them.
+
+## Setup / running locally (rare — this fork is meant to run on Render)
+
 ```
 pip install -r requirements.txt
-python google_login.py      # and/or microsoft_login.py
+python google_login.py      # Desktop-type OAuth client only; Render uses the Web-type client + env vars instead
 python app.py
 ```
+See [README.md](README.md) for the full Google Cloud Console + Render
+walkthrough. The user is non-technical with terminals/dashboards and needs
+very explicit, field-by-field, screenshot-driven guidance through any of
+this — established pattern, not a one-off preference.
