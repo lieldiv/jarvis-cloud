@@ -161,6 +161,31 @@
             .sys-ver { font-size: 10px; }
         }
 
+        /* Touch devices (not just narrow windows — a resized desktop browser
+           still has a real GPU): reported as a visible freeze on first paint
+           and general sluggishness that a desktop with the same connection
+           didn't have. backdrop-filter: blur() forces expensive real-time
+           compositing of everything behind it, and this HUD has several
+           full-viewport blurred layers (the sign-in gate you see immediately
+           on load, mic-check, confirm/inbox modals) plus multiple
+           simultaneously-animating glow/rotation effects — phone GPUs
+           handle that combination far worse than a desktop's. Falling back
+           to a plain semi-transparent background (no blur-through) and
+           trimming the purely decorative continuous animations keeps the
+           look close enough while cutting the actual rendering cost. */
+        @media (hover: none) and (pointer: coarse) {
+            header, .panel, .center-hud, .confirm-overlay, .inbox-overlay,
+            #google-gate, #mic-gate {
+                backdrop-filter: none !important;
+            }
+            .core-dots-1, .core-dots-2, .gate-emblem::before, .gate-emblem::after {
+                animation: none !important;
+            }
+            .confirm-modal, .inbox-modal {
+                animation: none !important;
+            }
+        }
+
         .panel {
             background: var(--panel-bg);
             border: 1px solid var(--border-color);
