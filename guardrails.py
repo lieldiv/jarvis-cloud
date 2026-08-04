@@ -212,6 +212,19 @@ def update_pending(token: str, args: tuple, description: str) -> bool:
     return True
 
 
+def update_pending_meta(token: str, **meta_updates) -> bool:
+    """Merges into a still-pending confirmation's meta — used when editing
+    a field that only meta tracks (e.g. a composed email's attachments,
+    which the edit form has no way to re-specify) so it survives an edit
+    to unrelated fields instead of silently reverting to "none"."""
+    _purge_expired()
+    entry = _PENDING.get(token)
+    if entry is None:
+        return False
+    entry["meta"].update(meta_updates)
+    return True
+
+
 def _purge_expired():
     now = time.time()
     for tok in [t for t, v in _PENDING.items() if now - v["created"] > _PENDING_TTL_SECONDS]:

@@ -31,6 +31,9 @@ productivity_service.py's confirm-before-acting wrapper, matching the
 import logging
 import base64
 import os
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import cert_bootstrap  # noqa: F401 — must run before any HTTPS-making import below
@@ -289,12 +292,27 @@ def list_recent_emails(user_id: str, max_results: int = 8, query: str = "is:unre
         return None
 
 
-def send_email(user_id: str, to: str, subject: str, body: str) -> str:
+def send_email(user_id: str, to: str, subject: str, body: str, attachments: list = None) -> str:
+    """attachments, if given, is a list of {"filename": str, "content_b64": str}
+    dicts — already-base64 file content, as it arrives from the HUD's file
+    input (see app.py's /api/compose/send). Plain MIMEText when there are
+    none, same as before; only switches to multipart when there's actually
+    something to attach."""
     svc = _gmail_service(user_id)
     if not svc:
         return "Gmail isn't connected, sir — please sign in again."
     try:
-        message = MIMEText(body)
+        if attachments:
+            message = MIMEMultipart()
+            message.attach(MIMEText(body))
+            for att in attachments:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(base64.b64decode(att["content_b64"]))
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", f'attachment; filename="{att["filename"]}"')
+                message.attach(part)
+        else:
+            message = MIMEText(body)
         message["to"] = to
         message["subject"] = subject
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")

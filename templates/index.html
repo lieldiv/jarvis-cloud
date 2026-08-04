@@ -608,6 +608,44 @@
         </div>
     </div>
 
+    <div class="confirm-overlay" id="compose-overlay">
+        <div class="confirm-modal">
+            <div class="confirm-title">▸ COMPOSE EMAIL</div>
+            <div class="confirm-fields">
+                <div class="confirm-field editing">
+                    <span class="k">To</span>
+                    <input type="email" id="compose-to" placeholder="recipient@example.com">
+                </div>
+                <div class="confirm-field editing">
+                    <span class="k">Reason</span>
+                    <input type="text" id="compose-instructions" placeholder="What do you want to say?">
+                </div>
+                <div class="confirm-field editing">
+                    <span class="k">Files</span>
+                    <input type="file" id="compose-files" multiple>
+                </div>
+            </div>
+            <div class="confirm-actions" id="compose-actions-draft">
+                <button class="btn btn-edit" onclick="draftComposeEmail()">✍️ DRAFT</button>
+                <button class="btn btn-reset" onclick="closeComposeModal()">✖ CANCEL</button>
+            </div>
+            <div class="confirm-fields" id="compose-draft-fields" style="display: none;">
+                <div class="confirm-field editing">
+                    <span class="k">Subject</span>
+                    <input type="text" id="compose-subject">
+                </div>
+                <div class="confirm-field editing">
+                    <span class="k">Body</span>
+                    <textarea id="compose-body"></textarea>
+                </div>
+            </div>
+            <div class="confirm-actions" id="compose-actions-send" style="display: none;">
+                <button class="btn btn-wake" onclick="sendComposeEmail()">📤 SEND</button>
+                <button class="btn btn-reset" onclick="closeComposeModal()">✖ CANCEL</button>
+            </div>
+        </div>
+    </div>
+
     <div class="inbox-overlay" id="inbox-overlay">
         <div class="inbox-modal">
             <div class="confirm-title">▸ INBOX</div>
@@ -626,7 +664,7 @@
                 <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar today?&quot;)">📅 TODAY'S AGENDA</button>
                 <button class="qa-btn" onclick="openInboxModal()">✉️ CHECK INBOX</button>
                 <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar this week?&quot;)">📆 THIS WEEK</button>
-                <button class="qa-btn" onclick="sendCommand('Help me draft a new email — ask me who it\'s to and what I want to say.')">📝 DRAFT EMAIL</button>
+                <button class="qa-btn" onclick="openComposeModal()">📝 DRAFT EMAIL</button>
                 <button class="qa-btn" onclick="resetMemory()">🧹 CLEAR MEMORY</button>
             </div>
 
@@ -964,6 +1002,95 @@
             document.getElementById('switch-account-overlay').classList.remove('show');
         }
 
+        // --- Compose a new email from scratch (not replying to an existing
+        // one — see the inbox modal's REPLY flow for that). Same two-step
+        // shape: fill in intent, DRAFT it with the model, review/edit the
+        // result, then SEND goes through the normal confirm-to-act approval
+        // modal like every other write in this app — nothing sends here.
+        function openComposeModal() {
+            document.getElementById('compose-to').value = '';
+            document.getElementById('compose-instructions').value = '';
+            document.getElementById('compose-files').value = '';
+            document.getElementById('compose-subject').value = '';
+            document.getElementById('compose-body').value = '';
+            document.getElementById('compose-draft-fields').style.display = 'none';
+            document.getElementById('compose-actions-draft').style.display = 'flex';
+            document.getElementById('compose-actions-send').style.display = 'none';
+            document.getElementById('compose-overlay').classList.add('show');
+        }
+
+        function closeComposeModal() {
+            document.getElementById('compose-overlay').classList.remove('show');
+        }
+
+        async function draftComposeEmail() {
+            const to = document.getElementById('compose-to').value.trim();
+            const instructions = document.getElementById('compose-instructions').value.trim();
+            if (!instructions) return;
+            try {
+                const res = await fetch('/api/compose/draft', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to, instructions }),
+                });
+                const data = await res.json();
+                if (data.error) {
+                    addLog(`SYS: ${data.error}`, 'sys');
+                    return;
+                }
+                document.getElementById('compose-subject').value = data.subject || '';
+                document.getElementById('compose-body').value = data.body || '';
+                document.getElementById('compose-draft-fields').style.display = 'flex';
+                document.getElementById('compose-actions-draft').style.display = 'none';
+                document.getElementById('compose-actions-send').style.display = 'flex';
+            } catch (err) {
+                addLog('SYS: Could not reach the server to draft that email.', 'sys');
+            }
+        }
+
+        function _fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]); // strip "data:...;base64," prefix
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function sendComposeEmail() {
+            const to = document.getElementById('compose-to').value.trim();
+            const subject = document.getElementById('compose-subject').value.trim();
+            const body = document.getElementById('compose-body').value.trim();
+            if (!to || !body) return;
+
+            const files = Array.from(document.getElementById('compose-files').files || []);
+            let attachments = [];
+            try {
+                attachments = await Promise.all(files.map(async f => ({
+                    filename: f.name,
+                    content_b64: await _fileToBase64(f),
+                })));
+            } catch (err) {
+                addLog('SYS: Could not read one of the attached files.', 'sys');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/compose/send', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to, subject, body, attachments }),
+                });
+                const data = await res.json();
+                if (data.token) {
+                    closeComposeModal();
+                    showConfirmModal(data); // same approval step every other write goes through
+                } else {
+                    addLog(`SYS: ${data.error || data.message || 'Could not prepare that email.'}`, 'sys');
+                }
+            } catch (err) {
+                addLog('SYS: Could not reach the server to send that email.', 'sys');
+            }
+        }
+
         checkGoogleAuthGate();
 
         // Nag reminder: mic is on but nobody's woken JARVIS up — nudge every
@@ -1239,6 +1366,7 @@
                     fieldRow('To', d.to),
                     fieldRow('Subject', d.subject),
                     fieldRow('Message', d.body),
+                    fieldRow('Attachments', (d.attachments || []).join(', ')),
                     fieldRow('Via', d.provider),
                 ].forEach(el => { if (el) fieldsBox.appendChild(el); });
             } else {

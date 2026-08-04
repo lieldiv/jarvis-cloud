@@ -177,6 +177,12 @@ MAX_HISTORY_MESSAGES = 24    # ~12 user/assistant turns of memory
 # a 400 "tool_use_failed" instead of just truncating gracefully.
 MAX_TOKENS = 1024
 
+# Compose-email attachments (see /api/compose/send) — kept modest since
+# they travel as base64 inside a JSON request body on a 512MB free-tier
+# instance shared across 16 gthread threads, not as multipart/form-data.
+MAX_ATTACHMENTS = 3
+MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024  # 4MB raw per file
+
 # The model has no built-in notion of "now" — without this it either guesses
 # a date or, worse, takes the user's spoken clock time (their local time) and
 # stamps it with a 'Z' (UTC) suffix unchanged, silently shifting every
@@ -1293,6 +1299,83 @@ def inbox_send_reply():
     # never sends on its own, it just returns a token for the existing
     # confirm modal to show and the user to approve.
     result = productivity_service.request_send_email(user_id, to, reply_subject, body)
+    return jsonify(result)
+
+
+@app.route("/api/compose/draft", methods=["POST"])
+def compose_draft():
+    """Unlike inbox_draft_reply, there's no original email to react to —
+    the model has to invent a subject line too, not just a reply body. Asks
+    for a fixed SUBJECT:/BODY: text format rather than JSON: an LLM's JSON
+    output can break on unescaped quotes/newlines inside a multi-sentence
+    body, where a plain delimiter the body text is very unlikely to contain
+    literally just needs a regex split."""
+    data = request.json or {}
+    to = (data.get("to") or "").strip()
+    instructions = (data.get("instructions") or "").strip()
+    if not instructions:
+        return jsonify({"error": "What would you like to say, sir?"}), 400
+
+    prompt = (
+        f"The user wants to send a new email{f' to {to}' if to else ''}.\n\n"
+        f"What they want it to say: {instructions}\n\n"
+        "Respond in EXACTLY this format, nothing before or after it:\n"
+        "SUBJECT: <a short, appropriate subject line>\n"
+        "BODY:\n"
+        "<the complete email body — a greeting, a few sentences that develop "
+        "the point above in your own words rather than just restating it "
+        "tersely, and a polite closing. No markdown, no placeholders like "
+        "[Your Name]. Match the language the instructions above are written in.>"
+    )
+    try:
+        completion = groq_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "You draft warm, professional plain-text emails for J.A.R.V.I.S., an assistant. Follow the requested SUBJECT:/BODY: format exactly."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.6, max_tokens=450,
+        )
+        raw = _strip_markdown(completion.choices[0].message.content or "").strip()
+        match = re.search(r"SUBJECT:\s*(.*?)\s*\n+BODY:\s*(.*)", raw, re.DOTALL | re.IGNORECASE)
+        subject, body = (match.group(1).strip(), match.group(2).strip()) if match else ("", raw)
+        return jsonify({"subject": subject, "body": body})
+    except RateLimitError:
+        return jsonify({"error": "I've hit my usage limit with Groq for now, sir — give it a few minutes."}), 429
+    except Exception as e:
+        logger.error(f"Compose-draft failed: {e}")
+        return jsonify({"error": "I couldn't draft that email, sir."}), 500
+
+
+@app.route("/api/compose/send", methods=["POST"])
+def compose_send():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Please sign in first, sir."}), 401
+
+    data = request.json or {}
+    to = (data.get("to") or "").strip()
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not to or not body:
+        return jsonify({"error": "Missing recipient or message body."}), 400
+
+    raw_attachments = data.get("attachments") or []
+    if len(raw_attachments) > MAX_ATTACHMENTS:
+        return jsonify({"error": f"Too many attachments, sir — {MAX_ATTACHMENTS} at most."}), 400
+    attachments = []
+    for att in raw_attachments:
+        filename = (att.get("filename") or "attachment").strip()
+        content_b64 = att.get("content_b64") or ""
+        # base64 runs ~4/3 the size of the raw bytes it encodes.
+        if len(content_b64) * 3 / 4 > MAX_ATTACHMENT_BYTES:
+            return jsonify({
+                "error": f"'{filename}' is too large, sir — {MAX_ATTACHMENT_BYTES // (1024 * 1024)}MB max per file.",
+            }), 400
+        attachments.append({"filename": filename, "content_b64": content_b64})
+
+    # Same confirm-gated path every other write in this app uses.
+    result = productivity_service.request_send_email(user_id, to, subject, body, attachments=attachments or None)
     return jsonify(result)
 
 

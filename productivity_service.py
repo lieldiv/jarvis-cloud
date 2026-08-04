@@ -29,7 +29,7 @@ from zoneinfo import ZoneInfo
 import google_service
 import microsoft_service
 import users
-from guardrails import request_confirmation, get_pending_meta, update_pending
+from guardrails import request_confirmation, get_pending_meta, update_pending, update_pending_meta
 
 logger = logging.getLogger("jarvis.productivity")
 
@@ -352,51 +352,67 @@ def _pick_mail_provider(provider: str) -> str:
     return "none"
 
 
-def request_send_email(user_id: str, to: str, subject: str, body: str, provider: str = "auto") -> dict:
+def request_send_email(user_id: str, to: str, subject: str, body: str, provider: str = "auto",
+                        attachments: list = None) -> dict:
     target = _pick_mail_provider(provider)
     if target == "none":
         return {"status": "refused", "message": "No mailbox is connected, sir — please sign in first."}
 
     if target == "google":
         impl = google_service.send_email
-        cb_args = (user_id, to, subject, body)
+        cb_args = (user_id, to, subject, body, attachments)
     else:
+        # microsoft_service.send_email doesn't support attachments (and isn't
+        # configured in this build anyway — see the module docstring).
         impl = microsoft_service.send_email
         cb_args = (to, subject, body)
 
     description_text = f"Send email to {to}: '{subject}' via {target.title()}"
     token = request_confirmation(
         description_text, impl, *cb_args,
-        meta={"kind": "email", "provider": target, "user_id": user_id},
+        meta={"kind": "email", "provider": target, "user_id": user_id, "attachments": attachments},
     )
     return {
         "status": "confirmation_required", "token": token, "message": description_text,
         "kind": "email",
-        "details": {"to": to, "subject": subject, "body": body, "provider": target.title()},
+        "details": {
+            "to": to, "subject": subject, "body": body, "provider": target.title(),
+            "attachments": [a["filename"] for a in (attachments or [])],
+        },
     }
 
 
-def edit_pending_email(token: str, to: str, subject: str, body: str) -> dict:
+def edit_pending_email(token: str, to: str, subject: str, body: str, attachments: list = None) -> dict:
     """Same idea as edit_pending_calendar_event() but for a pending send_email
-    proposal — swaps the stored args so approval sends the corrected message."""
+    proposal — swaps the stored args so approval sends the corrected message.
+    attachments, when omitted, keeps whatever was already attached (read
+    back from meta) — the HUD's edit form doesn't re-render a file picker,
+    so a typo fix to the subject shouldn't silently drop the attachment."""
     meta = get_pending_meta(token)
     if not meta or meta.get("kind") != "email":
         return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
 
+    if attachments is None:
+        attachments = meta.get("attachments")
+
     target = meta["provider"]
     if target == "google":
-        cb_args = (meta["user_id"], to, subject, body)
+        cb_args = (meta["user_id"], to, subject, body, attachments)
     else:
         cb_args = (to, subject, body)
 
     description_text = f"Send email to {to}: '{subject}' via {target.title()}"
     if not update_pending(token, cb_args, description_text):
         return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
+    update_pending_meta(token, attachments=attachments)
 
     return {
         "status": "ok", "token": token, "message": description_text,
         "kind": "email",
-        "details": {"to": to, "subject": subject, "body": body, "provider": target.title()},
+        "details": {
+            "to": to, "subject": subject, "body": body, "provider": target.title(),
+            "attachments": [a["filename"] for a in (attachments or [])],
+        },
     }
 
 
