@@ -2,6 +2,14 @@
 # Deploy: push this repo to GitHub, then "New +" -> "Blueprint" on Render
 # and point it at the repo. Render reads this file and creates the service.
 #
+# FREE TIER (chosen deliberately for now — no card required): no persistent
+# disk, so users.db (everyone's accounts/tokens) resets on every restart —
+# and Render's free web services also spin down after ~15 min idle, which
+# resets it too. Fine for "does this actually deploy and work at all"
+# testing; not fine for real users yet. Switch `plan: free` to a paid plan
+# + add back a `disk:` block (see git history / ask for it again) once
+# ready for that.
+#
 # Before the first deploy:
 #   1. Comment out pyautogui/pygetwindow/Pillow/pywhatkit in requirements.txt
 #      (see the note there) — they won't install on Render's Linux build.
@@ -14,23 +22,16 @@ services:
   - type: web
     name: jarvis-cloud
     runtime: python
-    plan: starter          # smallest paid plan with a persistent disk — the
-                            # free plan's ephemeral filesystem would lose
-                            # users.db (everyone's accounts/tokens) on every
-                            # restart, which defeats the point of this build
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
-    disk:
-      name: jarvis-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
     envVars:
       - key: JARVIS_DESKTOP_TOOLS
         value: "false"
       - key: JARVIS_DAILY_BRIEFING
         value: "false"       # scheduler is disabled in code too; belt and suspenders
       - key: JARVIS_DB_PATH
-        value: /opt/render/project/src/data/users.db
+        value: users.db       # ephemeral on free tier — resets on restart/spin-down, see note above
       - key: GROQ_API_KEY
         sync: false           # set manually in the Render dashboard
       - key: GOOGLE_CLIENT_ID
