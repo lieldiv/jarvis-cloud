@@ -25,7 +25,7 @@ from email.utils import parseaddr
 
 import google_service
 import microsoft_service
-from guardrails import request_confirmation
+from guardrails import request_confirmation, get_pending_meta, update_pending
 
 logger = logging.getLogger("jarvis.productivity")
 
@@ -241,14 +241,48 @@ def request_create_calendar_event(user_id: str, summary: str, start_iso: str, en
         cb_args = (summary, start_iso, end_iso, description, location)
 
     description_text = f"Create calendar event '{summary}' ({start_iso} - {end_iso}) on {target.title()}"
-    token = request_confirmation(description_text, impl, *cb_args)
+    token = request_confirmation(
+        description_text, impl, *cb_args,
+        meta={"kind": "calendar_event", "provider": target, "user_id": user_id},
+    )
     # `kind` + `details` let the HUD render a proper card instead of a text
     # blob — see resolveConfirmation()/renderConfirmationModal() in
-    # index.html. The confirmation itself is still driven purely by the
-    # token: approving re-runs `impl` with the args captured above, exactly
-    # as they were proposed, never whatever the modal happens to display.
+    # index.html. Approving re-runs `impl` with whatever args are currently
+    # stored for `token`: normally that's exactly what was proposed here,
+    # but edit_pending_calendar_event() below can swap them first if the
+    # user corrects something in the HUD before approving.
     return {
         "status": "confirmation_required", "token": token, "message": description_text,
+        "kind": "calendar_event",
+        "details": {
+            "summary": summary, "start_iso": start_iso, "end_iso": end_iso,
+            "description": description, "location": location, "provider": target.title(),
+        },
+    }
+
+
+def edit_pending_calendar_event(token: str, summary: str, start_iso: str, end_iso: str,
+                                 description: str = "", location: str = "") -> dict:
+    """Rewrites a still-pending calendar-event proposal in place, so the
+    next approve/deny acts on the corrected fields instead of the original
+    ones. Refuses if the token expired or was never a calendar-event
+    proposal — same failure mode as approving/denying a stale token."""
+    meta = get_pending_meta(token)
+    if not meta or meta.get("kind") != "calendar_event":
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
+
+    target = meta["provider"]
+    if target == "google":
+        cb_args = (meta["user_id"], summary, start_iso, end_iso, description, location)
+    else:
+        cb_args = (summary, start_iso, end_iso, description, location)
+
+    description_text = f"Create calendar event '{summary}' ({start_iso} - {end_iso}) on {target.title()}"
+    if not update_pending(token, cb_args, description_text):
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
+
+    return {
+        "status": "ok", "token": token, "message": description_text,
         "kind": "calendar_event",
         "details": {
             "summary": summary, "start_iso": start_iso, "end_iso": end_iso,
@@ -281,9 +315,36 @@ def request_send_email(user_id: str, to: str, subject: str, body: str, provider:
         cb_args = (to, subject, body)
 
     description_text = f"Send email to {to}: '{subject}' via {target.title()}"
-    token = request_confirmation(description_text, impl, *cb_args)
+    token = request_confirmation(
+        description_text, impl, *cb_args,
+        meta={"kind": "email", "provider": target, "user_id": user_id},
+    )
     return {
         "status": "confirmation_required", "token": token, "message": description_text,
+        "kind": "email",
+        "details": {"to": to, "subject": subject, "body": body, "provider": target.title()},
+    }
+
+
+def edit_pending_email(token: str, to: str, subject: str, body: str) -> dict:
+    """Same idea as edit_pending_calendar_event() but for a pending send_email
+    proposal — swaps the stored args so approval sends the corrected message."""
+    meta = get_pending_meta(token)
+    if not meta or meta.get("kind") != "email":
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
+
+    target = meta["provider"]
+    if target == "google":
+        cb_args = (meta["user_id"], to, subject, body)
+    else:
+        cb_args = (to, subject, body)
+
+    description_text = f"Send email to {to}: '{subject}' via {target.title()}"
+    if not update_pending(token, cb_args, description_text):
+        return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
+
+    return {
+        "status": "ok", "token": token, "message": description_text,
         "kind": "email",
         "details": {"to": to, "subject": subject, "body": body, "provider": target.title()},
     }

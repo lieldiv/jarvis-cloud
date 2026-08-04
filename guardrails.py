@@ -17,6 +17,8 @@ Three protections live here:
                         HUD instead of executed silently.
 """
 
+from __future__ import annotations  # PEP 604 `X | None` hints, running on Python 3.9
+
 import logging
 import os
 import secrets
@@ -130,9 +132,13 @@ _PENDING = {}
 _PENDING_TTL_SECONDS = 300
 
 
-def request_confirmation(description: str, callback, *cb_args, **cb_kwargs) -> str:
+def request_confirmation(description: str, callback, *cb_args, meta: dict = None, **cb_kwargs) -> str:
     """Register a destructive action. Returns a token to show the user.
     `callback(*cb_args, **cb_kwargs)` runs only on approval.
+
+    `meta` is opaque bookkeeping (e.g. which provider/user this proposal is
+    for) that the registering module needs later to rebuild `cb_args` if the
+    user edits the proposal before approving — see update_pending() below.
     """
     token = secrets.token_hex(4)
     _PENDING[token] = {
@@ -141,9 +147,30 @@ def request_confirmation(description: str, callback, *cb_args, **cb_kwargs) -> s
         "args": cb_args,
         "kwargs": cb_kwargs,
         "created": time.time(),
+        "meta": meta or {},
     }
     logger.info(f"Confirmation requested [{token}]: {description}")
     return token
+
+
+def get_pending_meta(token: str) -> dict | None:
+    _purge_expired()
+    entry = _PENDING.get(token)
+    return dict(entry["meta"]) if entry else None
+
+
+def update_pending(token: str, args: tuple, description: str) -> bool:
+    """Swap in edited args/description for a still-pending confirmation.
+    Approving afterward re-runs the same callback with these new args
+    instead of the ones originally proposed — the callback itself never
+    changes, only what it's called with."""
+    _purge_expired()
+    entry = _PENDING.get(token)
+    if entry is None:
+        return False
+    entry["args"] = args
+    entry["description"] = description
+    return True
 
 
 def _purge_expired():

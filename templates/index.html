@@ -339,6 +339,18 @@
         .confirm-field .v { color: #fff; text-shadow: 0 0 6px rgba(255,255,255,0.25); word-break: break-word; }
         .confirm-actions { display: flex; gap: 12px; }
         .confirm-actions .btn { flex: 1; padding: 16px; font-size: 13px; }
+        .btn-edit { background: rgba(0, 243, 255, 0.1); border: 1px solid rgba(0, 243, 255, 0.5); color: #eefcff; }
+
+        /* Edit mode: same field rows, but the value becomes an input/textarea
+           the user can actually fix (wrong time, typo'd title, ...) instead
+           of having to cancel and re-ask JARVIS from scratch. */
+        .confirm-field.editing { flex-direction: column; gap: 6px; }
+        .confirm-field input, .confirm-field textarea {
+            background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); color: #fff;
+            padding: 10px 12px; border-radius: 3px; font-family: 'Share Tech Mono', monospace;
+            font-size: 14px; width: 100%;
+        }
+        .confirm-field textarea { min-height: 70px; resize: vertical; }
 
         /* --- Inbox modal: clean structured summary + narration + editable
            reply. Deliberately bypasses the LLM for the list itself (raw
@@ -530,9 +542,14 @@
         <div class="confirm-modal">
             <div class="confirm-title" id="confirm-title">AWAITING YOUR APPROVAL</div>
             <div class="confirm-fields" id="confirm-fields"></div>
-            <div class="confirm-actions">
+            <div class="confirm-actions" id="confirm-actions-view">
                 <button class="btn btn-wake" onclick="resolveConfirmation(true)">✅ APPROVE</button>
+                <button class="btn btn-edit" onclick="enterConfirmEditMode()">✎ EDIT</button>
                 <button class="btn btn-interrupt" onclick="resolveConfirmation(false)">✖ CANCEL</button>
+            </div>
+            <div class="confirm-actions" id="confirm-actions-edit" style="display: none;">
+                <button class="btn btn-wake" onclick="saveConfirmEdit()">💾 SAVE</button>
+                <button class="btn btn-reset" onclick="exitConfirmEditMode()">↩ CANCEL EDIT</button>
             </div>
         </div>
     </div>
@@ -621,6 +638,7 @@
         let holoTimeout;
         let recognitionActive = false; // tracks whether the browser's recognizer is currently running
         let pendingConfirmToken = null; // set when the backend is waiting on a yes/no for a proposed action
+        let pendingConfirmEvt = null; // the full { kind, token, details } behind the modal, so EDIT can rebuild it
 
         // Web Speech API (SpeechRecognition) is NOT implemented in iOS
         // Safari (any browser engine on iOS, since they all use WebKit) and
@@ -1058,11 +1076,33 @@
             return div;
         }
 
-        function showConfirmModal(evt) {
-            pendingConfirmToken = evt.token;
+        // datetime-local inputs want "YYYY-MM-DDTHH:MM" with no seconds/offset.
+        // Our ISO strings are always local wall-clock time with an explicit
+        // offset already attached (see app.py's _time_context), so slicing
+        // is enough — no Date object involved, so there's no risk of the
+        // browser silently re-interpreting the offset into its own timezone.
+        function isoToLocalInputValue(iso) {
+            return (iso || '').slice(0, 16);
+        }
+        function localInputValueToIso(inputValue, referenceIso) {
+            const offset = (referenceIso || '').slice(19) || '+00:00';
+            return `${inputValue}:00${offset}`;
+        }
 
+        function editFieldRow(label, id, value, multiline) {
+            const div = document.createElement('div');
+            div.className = 'confirm-field editing';
+            const k = document.createElement('span'); k.className = 'k'; k.innerText = label;
+            const v = document.createElement(multiline ? 'textarea' : 'input');
+            if (!multiline) v.type = id.includes('start') || id.includes('end') ? 'datetime-local' : 'text';
+            v.id = id;
+            v.value = value || '';
+            div.append(k, v);
+            return div;
+        }
+
+        function renderConfirmReadView(evt) {
             document.getElementById('confirm-title').innerText = CONFIRM_TITLES[evt.kind] || 'CONFIRMATION REQUIRED';
-
             const fieldsBox = document.getElementById('confirm-fields');
             fieldsBox.innerHTML = '';
             const d = evt.details;
@@ -1086,12 +1126,104 @@
                 const el = fieldRow('Action', evt.message);
                 if (el) fieldsBox.appendChild(el);
             }
+        }
 
+        function renderConfirmEditView(evt) {
+            const fieldsBox = document.getElementById('confirm-fields');
+            fieldsBox.innerHTML = '';
+            const d = evt.details;
+
+            if (evt.kind === 'calendar_event' && d) {
+                [
+                    editFieldRow('Title', 'confirm-edit-summary', d.summary),
+                    editFieldRow('Start', 'confirm-edit-start', isoToLocalInputValue(d.start_iso)),
+                    editFieldRow('End', 'confirm-edit-end', isoToLocalInputValue(d.end_iso)),
+                    editFieldRow('Where', 'confirm-edit-location', d.location),
+                    editFieldRow('Notes', 'confirm-edit-description', d.description, true),
+                ].forEach(el => fieldsBox.appendChild(el));
+            } else if (evt.kind === 'email' && d) {
+                [
+                    editFieldRow('To', 'confirm-edit-to', d.to),
+                    editFieldRow('Subject', 'confirm-edit-subject', d.subject),
+                    editFieldRow('Message', 'confirm-edit-body', d.body, true),
+                ].forEach(el => fieldsBox.appendChild(el));
+            }
+        }
+
+        function showConfirmModal(evt) {
+            pendingConfirmToken = evt.token;
+            pendingConfirmEvt = evt;
+            document.getElementById('confirm-actions-view').style.display = 'flex';
+            document.getElementById('confirm-actions-edit').style.display = 'none';
+            // Only calendar events and emails have edited-able fields — a bare
+            // text-only action ("Action: ...") has nothing to edit into.
+            document.getElementById('confirm-actions-view').querySelector('.btn-edit').style.display =
+                (evt.kind === 'calendar_event' || evt.kind === 'email') ? '' : 'none';
+            renderConfirmReadView(evt);
             document.getElementById('confirm-overlay').classList.add('show');
+        }
+
+        function enterConfirmEditMode() {
+            if (!pendingConfirmEvt) return;
+            renderConfirmEditView(pendingConfirmEvt);
+            document.getElementById('confirm-actions-view').style.display = 'none';
+            document.getElementById('confirm-actions-edit').style.display = 'flex';
+        }
+
+        function exitConfirmEditMode() {
+            if (!pendingConfirmEvt) return;
+            renderConfirmReadView(pendingConfirmEvt);
+            document.getElementById('confirm-actions-view').style.display = 'flex';
+            document.getElementById('confirm-actions-edit').style.display = 'none';
+        }
+
+        async function saveConfirmEdit() {
+            if (!pendingConfirmEvt || !pendingConfirmToken) return;
+            const evt = pendingConfirmEvt;
+            let body;
+            if (evt.kind === 'calendar_event') {
+                body = {
+                    kind: 'calendar_event',
+                    summary: document.getElementById('confirm-edit-summary').value,
+                    start_iso: localInputValueToIso(document.getElementById('confirm-edit-start').value, evt.details.start_iso),
+                    end_iso: localInputValueToIso(document.getElementById('confirm-edit-end').value, evt.details.end_iso),
+                    location: document.getElementById('confirm-edit-location').value,
+                    description: document.getElementById('confirm-edit-description').value,
+                };
+            } else if (evt.kind === 'email') {
+                body = {
+                    kind: 'email',
+                    to: document.getElementById('confirm-edit-to').value,
+                    subject: document.getElementById('confirm-edit-subject').value,
+                    body: document.getElementById('confirm-edit-body').value,
+                };
+            } else {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/confirm/${pendingConfirmToken}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') {
+                    addLog(`SYS: Could not save that edit — ${data.message || 'unknown error'}`, 'sys');
+                    return;
+                }
+                pendingConfirmEvt = { ...evt, details: data.details, message: data.message };
+                exitConfirmEditMode();
+            } catch (err) {
+                addLog('SYS: Could not reach the server to save that edit.', 'sys');
+            }
         }
 
         function hideConfirmModal() {
             document.getElementById('confirm-overlay').classList.remove('show');
+            document.getElementById('confirm-actions-view').style.display = 'flex';
+            document.getElementById('confirm-actions-edit').style.display = 'none';
+            pendingConfirmEvt = null;
         }
 
         function handleConfirmationReply(text) {

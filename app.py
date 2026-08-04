@@ -1195,6 +1195,34 @@ def confirm_action(token):
     return jsonify({"response": message, "audio": audio_b64})
 
 
+@app.route("/api/confirm/<token>/edit", methods=["POST"])
+def edit_confirmation(token):
+    """Rewrites a still-pending proposal's fields before it's approved —
+    the HUD's Edit button. Nothing executes here; it only updates what a
+    subsequent /api/confirm/<token> approve will act on."""
+    data = request.json or {}
+    kind = data.get("kind")
+    if kind == "calendar_event":
+        result = productivity_service.edit_pending_calendar_event(
+            token,
+            summary=data.get("summary", ""),
+            start_iso=data.get("start_iso", ""),
+            end_iso=data.get("end_iso", ""),
+            description=data.get("description", ""),
+            location=data.get("location", ""),
+        )
+    elif kind == "email":
+        result = productivity_service.edit_pending_email(
+            token,
+            to=data.get("to", ""),
+            subject=data.get("subject", ""),
+            body=data.get("body", ""),
+        )
+    else:
+        return jsonify({"status": "error", "message": "Unknown confirmation kind."}), 400
+    return jsonify(result)
+
+
 @app.route("/api/pending", methods=["GET"])
 def pending_confirmations():
     return jsonify(list_pending())
