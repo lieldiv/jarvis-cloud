@@ -396,6 +396,26 @@
         .acct-row .forget-btn:hover { color: var(--red-alert); }
         .acct-row.add-new { justify-content: center; color: var(--user-gold); border-style: dashed; }
 
+        /* Compose modal's file attacher: the native <input type="file">
+           button/label combo can't be restyled directly in any browser, so
+           it's hidden and a themed button drives it instead — selected
+           files render as removable chips below, not the browser's own
+           "no file chosen" text. */
+        .file-picker { display: flex; flex-direction: column; gap: 10px; }
+        .file-picker-btn { align-self: flex-start; padding: 8px 16px; font-size: 12px; flex: none; }
+        .file-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .file-chip {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(0, 243, 255, 0.08); border: 1px solid var(--border-color);
+            border-radius: 3px; padding: 6px 10px 6px 12px; font-size: 13px; color: #eefcff;
+        }
+        .file-chip .file-size { color: var(--text-dim); font-size: 11px; }
+        .file-chip .remove-chip {
+            background: none; border: none; color: var(--text-dim); cursor: pointer;
+            font-size: 14px; padding: 0 2px; line-height: 1;
+        }
+        .file-chip .remove-chip:hover { color: var(--red-alert); }
+
         /* --- Inbox modal: clean structured summary + narration + editable
            reply. Deliberately bypasses the LLM for the list itself (raw
            provider data, no markdown risk) — only the optional drafted
@@ -622,7 +642,11 @@
                 </div>
                 <div class="confirm-field editing">
                     <span class="k">Files</span>
-                    <input type="file" id="compose-files" multiple>
+                    <div class="file-picker">
+                        <input type="file" id="compose-files-input" multiple style="display: none;" onchange="handleComposeFilesChosen(this.files)">
+                        <button type="button" class="btn btn-edit file-picker-btn" onclick="document.getElementById('compose-files-input').click()">📎 ATTACH FILES</button>
+                        <div class="file-chip-list" id="compose-file-chips"></div>
+                    </div>
                 </div>
             </div>
             <div class="confirm-actions" id="compose-actions-draft">
@@ -1007,10 +1031,70 @@
         // shape: fill in intent, DRAFT it with the model, review/edit the
         // result, then SEND goes through the normal confirm-to-act approval
         // modal like every other write in this app — nothing sends here.
+        // Selected files live in this array, not the native <input>'s own
+        // FileList (which is read-only — there's no way to remove a single
+        // item from it once chosen). The hidden input is just an event
+        // source; everything the user actually sees/interacts with (the
+        // ATTACH FILES button, the chip list, the per-file ✕) is themed
+        // HTML built from this array.
+        let composeSelectedFiles = [];
+        const COMPOSE_MAX_FILES = 3;
+        const COMPOSE_MAX_FILE_BYTES = 4 * 1024 * 1024; // keep in sync with app.py's MAX_ATTACHMENT_BYTES
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function renderComposeFileChips() {
+            const box = document.getElementById('compose-file-chips');
+            box.innerHTML = '';
+            composeSelectedFiles.forEach((file, i) => {
+                const chip = document.createElement('div');
+                chip.className = 'file-chip';
+                const name = document.createElement('span');
+                name.textContent = file.name;
+                const size = document.createElement('span');
+                size.className = 'file-size';
+                size.textContent = formatFileSize(file.size);
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'remove-chip';
+                remove.textContent = '✕';
+                remove.title = 'Remove';
+                remove.onclick = () => {
+                    composeSelectedFiles.splice(i, 1);
+                    renderComposeFileChips();
+                };
+                chip.append(name, size, remove);
+                box.appendChild(chip);
+            });
+        }
+
+        function handleComposeFilesChosen(fileList) {
+            for (const file of Array.from(fileList)) {
+                if (composeSelectedFiles.length >= COMPOSE_MAX_FILES) {
+                    addLog(`SYS: Only ${COMPOSE_MAX_FILES} attachments allowed, sir — '${file.name}' was skipped.`, 'sys');
+                    break;
+                }
+                if (file.size > COMPOSE_MAX_FILE_BYTES) {
+                    addLog(`SYS: '${file.name}' is too large, sir — ${formatFileSize(COMPOSE_MAX_FILE_BYTES)} max per file.`, 'sys');
+                    continue;
+                }
+                composeSelectedFiles.push(file);
+            }
+            // Reset so choosing the exact same file again later still fires
+            // onchange — the input's own value is otherwise unused.
+            document.getElementById('compose-files-input').value = '';
+            renderComposeFileChips();
+        }
+
         function openComposeModal() {
             document.getElementById('compose-to').value = '';
             document.getElementById('compose-instructions').value = '';
-            document.getElementById('compose-files').value = '';
+            composeSelectedFiles = [];
+            renderComposeFileChips();
             document.getElementById('compose-subject').value = '';
             document.getElementById('compose-body').value = '';
             document.getElementById('compose-draft-fields').style.display = 'none';
@@ -1062,10 +1146,9 @@
             const body = document.getElementById('compose-body').value.trim();
             if (!to || !body) return;
 
-            const files = Array.from(document.getElementById('compose-files').files || []);
             let attachments = [];
             try {
-                attachments = await Promise.all(files.map(async f => ({
+                attachments = await Promise.all(composeSelectedFiles.map(async f => ({
                     filename: f.name,
                     content_b64: await _fileToBase64(f),
                 })));
