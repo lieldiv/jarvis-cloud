@@ -352,6 +352,25 @@
         }
         .confirm-field textarea { min-height: 70px; resize: vertical; }
 
+        /* Switch-account modal: each remembered account is a clickable row —
+           picking one still goes through a real Google sign-in (just with
+           that email pre-filled via login_hint), never an instant swap
+           without re-auth, since anyone sharing this browser could
+           otherwise impersonate a previously-used account. */
+        .acct-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; background: rgba(0, 243, 255, 0.06); border: 1px solid var(--border-color);
+            border-radius: 4px; padding: 12px 14px; cursor: pointer; transition: all 0.2s;
+        }
+        .acct-row:hover { background: rgba(0, 243, 255, 0.15); border-color: var(--user-cyan, #00f3ff); }
+        .acct-row .email { font-size: 14px; color: #fff; }
+        .acct-row .forget-btn {
+            background: none; border: none; color: var(--text-dim); font-size: 13px;
+            cursor: pointer; padding: 2px 6px;
+        }
+        .acct-row .forget-btn:hover { color: var(--red-alert); }
+        .acct-row.add-new { justify-content: center; color: var(--user-gold); border-style: dashed; }
+
         /* --- Inbox modal: clean structured summary + narration + editable
            reply. Deliberately bypasses the LLM for the list itself (raw
            provider data, no markdown risk) — only the optional drafted
@@ -550,6 +569,16 @@
             <div class="confirm-actions" id="confirm-actions-edit" style="display: none;">
                 <button class="btn btn-wake" onclick="saveConfirmEdit()">💾 SAVE</button>
                 <button class="btn btn-reset" onclick="exitConfirmEditMode()">↩ CANCEL EDIT</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-overlay" id="switch-account-overlay">
+        <div class="confirm-modal">
+            <div class="confirm-title">▸ SWITCH ACCOUNT</div>
+            <div class="confirm-fields" id="switch-account-list"></div>
+            <div class="confirm-actions">
+                <button class="btn btn-reset" onclick="closeSwitchAccountModal()">✖ CLOSE</button>
             </div>
         </div>
     </div>
@@ -819,6 +848,7 @@
             if (status.connected) {
                 gate.classList.remove('show');
                 document.getElementById('google-account-ctrl').style.display = 'flex';
+                if (status.email) rememberAccount(status.email);
                 if (authResult === 'ok') {
                     addLog('SYS: Google account connected — Calendar, Gmail and Drive access granted.', 'sys');
                 }
@@ -844,12 +874,69 @@
             window.location.reload();
         }
 
+        // --- Switch account: remembers which Google accounts have signed
+        // in on this browser (client-side only, localStorage) so the button
+        // can offer a quick picker instead of always disconnecting first.
+        // Picking a remembered account still goes through a real Google
+        // sign-in — it's a pre-filled login_hint, not an instant swap —
+        // since anything else would let someone sharing this browser
+        // impersonate a previously-used account without proving who they are.
+        const KNOWN_ACCOUNTS_KEY = 'jarvis_known_accounts';
+
+        function getKnownAccounts() {
+            try {
+                return JSON.parse(localStorage.getItem(KNOWN_ACCOUNTS_KEY) || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function rememberAccount(email) {
+            const accounts = getKnownAccounts().filter(e => e !== email);
+            accounts.unshift(email);
+            localStorage.setItem(KNOWN_ACCOUNTS_KEY, JSON.stringify(accounts.slice(0, 8)));
+        }
+
+        function forgetAccount(email) {
+            const accounts = getKnownAccounts().filter(e => e !== email);
+            localStorage.setItem(KNOWN_ACCOUNTS_KEY, JSON.stringify(accounts));
+            renderSwitchAccountList();
+        }
+
+        function renderSwitchAccountList() {
+            const box = document.getElementById('switch-account-list');
+            box.innerHTML = '';
+            getKnownAccounts().forEach(email => {
+                const row = document.createElement('div');
+                row.className = 'acct-row';
+                const label = document.createElement('span');
+                label.className = 'email';
+                label.textContent = email;
+                label.onclick = () => { window.location.href = '/auth/google/start?login_hint=' + encodeURIComponent(email); };
+                const forget = document.createElement('button');
+                forget.className = 'forget-btn';
+                forget.textContent = '✕';
+                forget.title = 'Forget this account';
+                forget.onclick = (ev) => { ev.stopPropagation(); forgetAccount(email); };
+                row.append(label, forget);
+                row.onclick = () => label.onclick();
+                box.appendChild(row);
+            });
+
+            const addRow = document.createElement('div');
+            addRow.className = 'acct-row add-new';
+            addRow.textContent = '+ SIGN IN WITH A DIFFERENT ACCOUNT';
+            addRow.onclick = () => { window.location.href = '/auth/google/start'; };
+            box.appendChild(addRow);
+        }
+
         function switchGoogleAccount() {
-            // Disconnect locally first so the reload lands back on the gate,
-            // then the gate's own link takes them through Google's account
-            // chooser (server sends prompt=select_account) to pick a
-            // different one.
-            disconnectGoogle();
+            renderSwitchAccountList();
+            document.getElementById('switch-account-overlay').classList.add('show');
+        }
+
+        function closeSwitchAccountModal() {
+            document.getElementById('switch-account-overlay').classList.remove('show');
         }
 
         checkGoogleAuthGate();

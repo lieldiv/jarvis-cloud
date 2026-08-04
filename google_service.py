@@ -139,16 +139,22 @@ def _web_flow(redirect_uri: str):
     return Flow.from_client_config(_client_config(), SCOPES, redirect_uri=redirect_uri)
 
 
-def get_authorization_url(redirect_uri: str):
+def get_authorization_url(redirect_uri: str, login_hint: str = None):
     """Returns (auth_url, state, code_verifier) — see exchange_code for why
     the caller must stash both state and code_verifier (e.g. Flask session)
-    and pass them back."""
+    and pass them back. login_hint pre-fills a specific email on Google's
+    account chooser (the HUD's "switch account" list) — it's a UX nicety
+    only, not a security boundary, since the user still has to complete a
+    real sign-in either way."""
     flow = _web_flow(redirect_uri)
-    auth_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="select_account consent",
-    )
+    kwargs = {
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "select_account consent",
+    }
+    if login_hint:
+        kwargs["login_hint"] = login_hint
+    auth_url, state = flow.authorization_url(**kwargs)
     return auth_url, state, flow.code_verifier
 
 

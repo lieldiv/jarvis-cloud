@@ -1132,7 +1132,8 @@ def google_auth_start():
     if not google_service.CONFIGURED:
         return "Google OAuth isn't configured on this server (missing GOOGLE_CLIENT_ID/SECRET).", 500
     redirect_uri = url_for("google_auth_callback", _external=True)
-    auth_url, state, code_verifier = google_service.get_authorization_url(redirect_uri)
+    login_hint = request.args.get("login_hint") or None
+    auth_url, state, code_verifier = google_service.get_authorization_url(redirect_uri, login_hint=login_hint)
     session["google_oauth_state"] = state
     session["google_oauth_code_verifier"] = code_verifier
     return redirect(auth_url)
