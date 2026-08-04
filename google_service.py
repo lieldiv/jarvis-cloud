@@ -1,6 +1,6 @@
 """
 google_service.py — Google Calendar + Gmail, via the official Google APIs
-(no scraping, no simulated clicks — same "real API" approach as Spotify).
+(no scraping, no simulated clicks).
 
 MULTI-USER BUILD: every function that touches a token now takes a `user_id`
 (Google's own stable account id) and reads/writes that user's row via
