@@ -30,9 +30,6 @@ gunicorn==23.0.0
 # Pillow==11.2.1
 # pywhatkit==5.4
 
-# --- Spotify -----------------------------------------------------------
-spotipy==2.26.0
-
 # --- Process inspection (kill_process tool) -----------------------------
 psutil==7.0.0
 

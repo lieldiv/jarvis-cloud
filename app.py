@@ -14,11 +14,10 @@ Major changes from the original version:
   4. RELIABILITY: every external call (weather, TTS, subprocess, pywhatkit)
      is wrapped so one failure returns a spoken error instead of crashing
      the request or leaving the user with a silent HUD.
-  5. NEW TOOLS: play_on_spotify (real Spotify Web API playback, not just
-     opening the app), draw_shape_in_paint (mouse automation to draw a
-     circle), and calculate (safe AST-based arithmetic, typed into the
-     Calculator app so it's visible on screen). See README for setup
-     and known limitations of each.
+  5. NEW TOOLS: draw_shape_in_paint (mouse automation to draw a circle),
+     and calculate (safe AST-based arithmetic, typed into the Calculator
+     app so it's visible on screen). See README for setup and known
+     limitations of each.
 """
 
 import ast
@@ -41,9 +40,9 @@ from zoneinfo import ZoneInfo
 # --- Resolve the app's real "home" directory and make it the working
 # directory, BEFORE any other local import runs --------------------------
 # Everything below this line that opens a relative path — load_dotenv()'s
-# .env, jarvis.log, .google_cache/, .ms_cache.bin, .spotify_cache, and
-# cert_bootstrap's .certs/ bundle — assumes cwd is "the folder this app
-# lives in". That's true by luck when a developer runs `python app.py`
+# .env, jarvis.log, .google_cache/, .ms_cache.bin, and cert_bootstrap's
+# .certs/ bundle — assumes cwd is "the folder this app lives in". That's
+# true by luck when a developer runs `python app.py`
 # from inside the project folder, but NOT guaranteed for:
 #   - a packaged PyInstaller .exe launched by double-click (Explorer sets
 #     cwd to the .exe's folder, but a desktop shortcut with a different
@@ -84,12 +83,6 @@ try:
     import pygetwindow as gw
 except Exception:
     gw = None
-
-try:
-    import spotipy
-    from spotipy.oauth2 import SpotifyOAuth
-except Exception:
-    spotipy = None
 
 # Explicit path (not the bare load_dotenv() default) so this is immune to
 # python-dotenv's own cwd/caller-frame search heuristics, which behave
@@ -229,7 +222,7 @@ DESKTOP_TOOLS_ENABLED = os.environ.get("JARVIS_DESKTOP_TOOLS", "true").lower() =
 # false — no point spending tokens telling the model how to use tools it
 # was never actually given, on every single request.
 _DESKTOP_CONTROL_GUIDANCE = (
-    " Never use computer_use for Spotify playback. You control this "
+    " You control this "
     "computer the way a person does otherwise: open_application launches "
     "an app, and computer_use then takes a screenshot and clicks/types/"
     "drags inside it — use computer_use only for on-screen actions that "
@@ -265,25 +258,14 @@ SYSTEM_PROMPT = (
     "action on the user's real calendar/mailbox; use it whenever they ask "
     "to be reminded of something later.\n\n"
     "Beyond that, you are a general-purpose agent for whatever the user "
-    "needs. For Spotify specifically, ALWAYS use play_on_spotify to play or "
-    "search for a song — it controls real playback via the Spotify API "
-    "(opens the app itself if needed) and is far more reliable than "
-    "clicking around the screen." + _DESKTOP_CONTROL_GUIDANCE +
+    "needs." + _DESKTOP_CONTROL_GUIDANCE +
     " Also available: get_weather, "
     "web_search (opens results in the browser), play_media (YouTube, for "
-    "non-Spotify video/music), and calculate. Use write_and_test_code when "
+    "music/video), and calculate. Use write_and_test_code when "
     "asked to write and verify a script. Call the right tool instead of "
     "guessing or saying you can't; if a command doesn't match any tool, "
     "just respond conversationally."
 )
-
-# Spotify API config — see README for how to create these credentials. Both
-# must be set for Spotify control to work; the tool degrades gracefully
-# (spoken message, no crash) if they're missing.
-SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
-SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
-SPOTIFY_REDIRECT_URI = os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
-SPOTIFY_SCOPE = "user-modify-playback-state user-read-playback-state"
 
 # Paint automation config — these are RELATIVE (0.0-1.0) coordinates within
 # the maximized Paint window, not pixels. They're a starting guess, not a
@@ -457,81 +439,6 @@ def play_media(query: str) -> str:
     return f"I've opened YouTube results for {query}, sir."
 
 
-_spotify_client = None
-
-
-def get_spotify_client():
-    """Lazily build (and cache) an authenticated Spotify client. Returns
-    None if credentials aren't configured or auth fails, so callers can
-    degrade to a spoken message instead of crashing the request.
-
-    On first use this opens a browser for you to log in and approve access
-    — see spotify_login.py to do that once up front instead of mid-command.
-    """
-    global _spotify_client
-    if _spotify_client is not None:
-        return _spotify_client
-    if not (spotipy and SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET):
-        return None
-    try:
-        auth_manager = SpotifyOAuth(
-            client_id=SPOTIFY_CLIENT_ID,
-            client_secret=SPOTIFY_CLIENT_SECRET,
-            redirect_uri=SPOTIFY_REDIRECT_URI,
-            scope=SPOTIFY_SCOPE,
-            cache_path=".spotify_cache",
-            open_browser=True,
-        )
-        _spotify_client = spotipy.Spotify(auth_manager=auth_manager)
-        return _spotify_client
-    except Exception as e:
-        logger.error(f"Spotify auth failed: {e}")
-        return None
-
-
-def play_on_spotify(query: str) -> str:
-    query = (query or "").strip()
-    if not query:
-        return "What should I play on Spotify, sir?"
-
-    sp = get_spotify_client()
-    if not sp:
-        return "Spotify isn't configured yet, sir — add your API credentials to .env."
-
-    try:
-        results = sp.search(q=query, type="track", limit=1)
-        tracks = results.get("tracks", {}).get("items", [])
-        if not tracks:
-            return f"I couldn't find '{query}' on Spotify, sir."
-
-        track = tracks[0]
-        track_name = track["name"]
-        artist_name = track["artists"][0]["name"] if track["artists"] else ""
-
-        devices = sp.devices().get("devices", [])
-        if not devices:
-            # No Spotify Connect device is active yet — open the desktop app
-            # and give it a moment to register itself as a playback target.
-            open_application("spotify")
-            time.sleep(4)
-            devices = sp.devices().get("devices", [])
-
-        if not devices:
-            return "I couldn't find an active Spotify device, sir. Please open Spotify first."
-
-        sp.start_playback(device_id=devices[0]["id"], uris=[track["uri"]])
-        return f"Playing {track_name} by {artist_name} on Spotify, sir."
-
-    except spotipy.exceptions.SpotifyException as e:
-        logger.error(f"Spotify playback error: {e}")
-        if getattr(e, "http_status", None) == 403:
-            return "Spotify playback control needs a Premium account, sir."
-        return "I ran into a problem controlling Spotify, sir."
-    except Exception as e:
-        logger.error(f"Spotify error: {e}")
-        return "I ran into a problem reaching Spotify, sir."
-
-
 def draw_shape_in_paint(shape: str = "circle", size: str = "medium") -> str:
     if not pyautogui:
         return "Drawing automation isn't available on this system, sir."
@@ -685,25 +592,8 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "play_on_spotify",
-            "description": (
-                "Search for and play a song on Spotify via the real Spotify API — "
-                "opens the Spotify app itself if it isn't already running with an "
-                "active device. Always use this for Spotify requests, never "
-                "computer_use."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {"query": {"type": "string", "description": "Song and/or artist to search for, e.g. 'Bohemian Rhapsody Queen'."}},
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "play_media",
-            "description": "Play a song or video on YouTube — only for non-Spotify requests.",
+            "description": "Play a song or video on YouTube.",
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
@@ -1013,7 +903,6 @@ _STATIC_TOOL_IMPL = {
     "open_application": lambda args: open_application(args.get("app_name", "")),
     "close_application": lambda args: close_application(args.get("app_name", "")),
     "web_search": lambda args: web_search(args.get("query", "")),
-    "play_on_spotify": lambda args: play_on_spotify(args.get("query", "")),
     "play_media": lambda args: play_media(args.get("query", "")),
     "calculate": lambda args: calculate(args.get("expression", "")),
 }
