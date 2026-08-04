@@ -787,7 +787,7 @@
             }
 
             document.getElementById('mic-listen-visual').style.display = 'block';
-            document.getElementById('mic-title').innerText = 'SAY "WAKE UP" TO BEGIN';
+            document.getElementById('mic-title').innerText = 'אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
             document.getElementById('mic-subtitle').innerText = 'Listening…';
             document.getElementById('status-tag').classList.remove('hint-pulse');
 
@@ -945,7 +945,7 @@
         // 20s so it's obvious it's just waiting, not broken or ignoring you.
         setInterval(() => {
             if (micInitialized && !isAwake) {
-                showHologram('Say "WAKE UP" to begin, sir.');
+                showHologram('אמור "WAKE UP" או "בוקר טוב" כדי להתחיל, אדוני.');
             }
         }, 20000);
 
@@ -1590,7 +1590,7 @@
             isAwake = false;
             if (currentAudio) currentAudio.pause();
             setHudState('SLEEPING');
-            addLog('SYS: JARVIS standby mode. Say "WAKE UP" to start.', 'sys');
+            addLog('SYS: JARVIS במצב המתנה. אמור "WAKE UP" או "בוקר טוב" כדי להתחיל.', 'sys');
             document.getElementById('holo-screen').style.display = 'none';
         }
 
@@ -1601,7 +1601,7 @@
 
             if (state === 'SLEEPING') {
                 core.classList.add('sleeping');
-                statusText.innerText = 'STANDBY — SAY "WAKE UP" TO START';
+                statusText.innerText = 'המתנה — אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
             } else if (state === 'SPEAKING') {
                 core.classList.add('speaking');
                 statusText.innerText = 'JARVIS SPEAKING...';
