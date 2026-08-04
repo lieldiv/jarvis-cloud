@@ -175,14 +175,26 @@ def get_inbox_summary_spoken(emails: list) -> str:
     """Pure string formatting, no LLM call — same zero-LLM philosophy as
     get_daily_agenda_text/daily_briefing.py, so this can't come back garbled
     with markdown (there's no free-form model output to strip) and can't
-    break just because a Groq key is flaky."""
+    break just because a Groq key is flaky.
+
+    Deliberately just names senders (grouped, with a count if there's more
+    than one from the same person) rather than reading every subject line —
+    the full subjects are already visible in the inbox card list, and having
+    this read out loud too made checking the inbox by voice feel like being
+    read a wall of text instead of a quick spoken headline."""
     if not emails:
         return "Your inbox is clear, sir."
+    counts = {}
+    order = []
+    for e in emails:
+        name = e["sender_name"]
+        if name not in counts:
+            counts[name] = 0
+            order.append(name)
+        counts[name] += 1
+    senders = ", ".join(f"{counts[name]} from {name}" if counts[name] > 1 else f"one from {name}" for name in order)
     count = len(emails)
-    lines = [f"You have {count} unread email{'s' if count != 1 else ''}, sir."]
-    for e in emails[:5]:
-        lines.append(f"From {e['sender_name']}: {e['subject']}.")
-    return " ".join(lines)
+    return f"You have {count} unread email{'s' if count != 1 else ''}, sir — {senders}."
 
 
 def get_daily_agenda_text(user_id: str) -> str:
@@ -212,9 +224,18 @@ def get_daily_agenda_text(user_id: str) -> str:
         parts.append("Nothing on the calendar today.")
 
     if emails:
-        parts.append(f"There are {len(emails)} unread email(s), including:")
-        for e in emails[:5]:
-            parts.append(f"  from {e['sender']}: {e['subject']}")
+        # Names only (grouped/counted), not every subject line — see
+        # get_inbox_summary_spoken's docstring for why.
+        counts = {}
+        order = []
+        for e in emails:
+            name = parseaddr(e.get("sender", ""))[0] or e.get("sender", "unknown")
+            if name not in counts:
+                counts[name] = 0
+                order.append(name)
+            counts[name] += 1
+        senders = ", ".join(f"{counts[n]} from {n}" if counts[n] > 1 else f"one from {n}" for n in order)
+        parts.append(f"There are {len(emails)} unread email(s): {senders}.")
     elif any_mail_configured():
         parts.append("Inbox is clear.")
 
