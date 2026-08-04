@@ -12,17 +12,17 @@ import shutil
 import psutil  # add to requirements.txt: psutil
 
 from guardrails import (
-    resolve_safe_path, ensure_workspace, SandboxViolation,
+    resolve_safe_path, ensure_workspace, ensure_user_workspace, SandboxViolation,
     request_confirmation, CRITICAL_PROCESS_DENYLIST,
 )
 
 logger = logging.getLogger("jarvis.file_tools")
 
 
-def list_dir(rel_path: str = ".") -> str:
-    ensure_workspace()
+def list_dir(rel_path: str = ".", user_id: str = None) -> str:
+    ensure_user_workspace(user_id) if user_id else ensure_workspace()
     try:
-        path = resolve_safe_path(rel_path)
+        path = resolve_safe_path(rel_path, user_id=user_id)
     except SandboxViolation as e:
         return str(e)
     if not os.path.isdir(path):
@@ -31,9 +31,9 @@ def list_dir(rel_path: str = ".") -> str:
     return ", ".join(entries) if entries else "(empty)"
 
 
-def read_file(rel_path: str, max_chars: int = 4000) -> str:
+def read_file(rel_path: str, max_chars: int = 4000, user_id: str = None) -> str:
     try:
-        path = resolve_safe_path(rel_path)
+        path = resolve_safe_path(rel_path, user_id=user_id)
     except SandboxViolation as e:
         return str(e)
     if not os.path.isfile(path):
@@ -43,10 +43,10 @@ def read_file(rel_path: str, max_chars: int = 4000) -> str:
     return content
 
 
-def write_file(rel_path: str, content: str) -> str:
-    ensure_workspace()
+def write_file(rel_path: str, content: str, user_id: str = None) -> str:
+    ensure_user_workspace(user_id) if user_id else ensure_workspace()
     try:
-        path = resolve_safe_path(rel_path)
+        path = resolve_safe_path(rel_path, user_id=user_id)
     except SandboxViolation as e:
         return str(e)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -72,14 +72,16 @@ def _do_delete(path: str) -> str:
         return "That delete failed, sir — please check the file and try again."
 
 
-def delete_path(rel_path: str) -> dict:
+def delete_path(rel_path: str, user_id: str = None) -> dict:
     """Never deletes directly. Registers a confirmation and returns the
     token + description for the caller (Flask route) to surface to the HUD.
     Paths outside the workspace are refused outright — no confirmation can
-    override that, by design.
+    override that, by design. The resolved (already user-scoped) path is
+    what gets captured in the confirmation callback, so approval always
+    acts on this user's own file regardless of who clicks approve.
     """
     try:
-        path = resolve_safe_path(rel_path)
+        path = resolve_safe_path(rel_path, user_id=user_id)
     except SandboxViolation as e:
         return {"status": "refused", "message": str(e)}
 
@@ -87,7 +89,7 @@ def delete_path(rel_path: str) -> dict:
         return {"status": "refused", "message": f"'{rel_path}' doesn't exist, sir."}
 
     description = f"Delete '{rel_path}' from the JARVIS workspace"
-    token = request_confirmation(description, _do_delete, path)
+    token = request_confirmation(description, _do_delete, path, meta={"kind": "file_delete", "user_id": user_id})
     return {"status": "confirmation_required", "token": token, "message": description}
 
 

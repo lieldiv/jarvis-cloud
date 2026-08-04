@@ -108,7 +108,7 @@ logging.basicConfig(
 logger = logging.getLogger("jarvis")
 
 # --- Computer-use / self-healing / sandboxing additions ---------------------
-from guardrails import refuse_if_elevated, ensure_workspace, resolve_confirmation, list_pending
+from guardrails import refuse_if_elevated, ensure_workspace, resolve_confirmation, get_pending_meta
 import file_tools
 import vision_action
 import self_healing
@@ -228,7 +228,10 @@ SYSTEM_PROMPT = (
     "ever register a confirmation request — you cannot act on the user's "
     "calendar or mailbox without them explicitly approving it afterward. "
     "Always phrase these as offers ('Shall I add that, sir?'), never as "
-    "already-done.\n\n"
+    "already-done. set_reminder is different — it executes immediately, no "
+    "approval needed, since it's a private note-to-self rather than an "
+    "action on the user's real calendar/mailbox; use it whenever they ask "
+    "to be reminded of something later.\n\n"
     "Beyond that, you are a general-purpose agent for whatever the user "
     "needs. For Spotify specifically, ALWAYS use play_on_spotify to play or "
     "search for a song — it controls real playback via the Spotify API "
@@ -795,6 +798,29 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "set_reminder",
+            "description": (
+                "Set a reminder for a future time — delivered by email at that "
+                "time (there's no other reliable way to reach the user later if "
+                "they're not looking at the HUD right then). Executes immediately, "
+                "no approval needed — it's a private note-to-self, not an action "
+                "on anyone's real calendar or mailbox. Use ISO 8601 with the local "
+                "UTC offset given in the current-time system message, same as "
+                "create_calendar_event."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "What to be reminded of, e.g. 'call the dentist'."},
+                    "remind_at_iso": {"type": "string"},
+                },
+                "required": ["text", "remind_at_iso"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "computer_use",
             "description": (
                 "General screen control for anything without a dedicated tool: "
@@ -877,28 +903,30 @@ TOOLS = [
     },
 ]
 
-def _computer_use(args):
+def _computer_use(user_id, args):
     return vision_action.vision_action_loop(
-        groq_client, args.get("goal", ""), on_step=event_stream.push_event
+        groq_client, args.get("goal", ""),
+        on_step=lambda evt: event_stream.push_event(evt, user_id=user_id),
     )
 
 
-def _write_and_test_code(args):
+def _write_and_test_code(user_id, args):
     outcome = self_healing.self_healing_code_loop(
         groq_client, MODEL_NAME, args.get("goal", ""), args.get("initial_code", ""),
-        on_attempt=event_stream.push_event,
+        on_attempt=lambda evt: event_stream.push_event(evt, user_id=user_id),
+        user_id=user_id,
     )
     if outcome["success"]:
         return f"Succeeded after {outcome['attempts']} attempt(s), sir. Output: {outcome['stdout'][:300]}"
     return f"Couldn't get it working after {outcome['attempts']} attempts, sir. Last error: {outcome['stderr'][-300:]}"
 
 
-def _delete_workspace_path(args):
-    result = file_tools.delete_path(args.get("path", ""))
+def _delete_workspace_path(user_id, args):
+    result = file_tools.delete_path(args.get("path", ""), user_id=user_id)
     if result["status"] == "confirmation_required":
         event_stream.push_event({
             "type": "confirmation_required", "token": result["token"], "message": result["message"],
-        })
+        }, user_id=user_id)
         return f"Please confirm, sir: {result['message']} (token {result['token']})"
     return result["message"]
 
@@ -917,7 +945,7 @@ def _create_calendar_event(user_id, args):
         event_stream.push_event({
             "type": "confirmation_required", "token": result["token"], "message": result["message"],
             "kind": result.get("kind", "generic"), "details": result.get("details"),
-        })
+        }, user_id=user_id)
         return f"I've drawn up '{args.get('summary', '')}' for your approval, sir — check the HUD."
     return result["message"]
 
@@ -934,15 +962,24 @@ def _send_email(user_id, args):
         event_stream.push_event({
             "type": "confirmation_required", "token": result["token"], "message": result["message"],
             "kind": result.get("kind", "generic"), "details": result.get("details"),
-        })
+        }, user_id=user_id)
         return f"I've drawn up that email for your approval, sir — check the HUD."
     return result["message"]
 
 
-# Tools that don't touch a specific user's calendar/mail are shared, static
-# implementations. The calendar/email tools need to know WHICH user's data
-# to touch, so their dispatch entries are built fresh per request, closing
-# over that request's signed-in user_id — see _build_tool_impl below.
+def _set_reminder(user_id, args):
+    result = productivity_service.request_set_reminder(
+        user_id, text=args.get("text", ""), remind_at_iso=args.get("remind_at_iso", ""),
+    )
+    return result["message"]
+
+
+# Every tool dispatch entry is now built fresh per request, closing over
+# that request's signed-in user_id — including the ones below that don't
+# touch calendar/mail data. They used to live in a shared, static dict, but
+# computer_use/write_and_test_code/the workspace file tools all needed
+# user_id too (per-user sandboxing, per-user event_stream delivery), so at
+# that point there was nothing left that was actually safe to share.
 _STATIC_TOOL_IMPL = {
     "get_weather": lambda args: get_live_weather(args.get("location", "")),
     "open_application": lambda args: open_application(args.get("app_name", "")),
@@ -951,12 +988,6 @@ _STATIC_TOOL_IMPL = {
     "play_on_spotify": lambda args: play_on_spotify(args.get("query", "")),
     "play_media": lambda args: play_media(args.get("query", "")),
     "calculate": lambda args: calculate(args.get("expression", "")),
-    "computer_use": _computer_use,
-    "write_and_test_code": _write_and_test_code,
-    "list_workspace": lambda args: file_tools.list_dir(args.get("path", ".")),
-    "read_workspace_file": lambda args: file_tools.read_file(args.get("path", "")),
-    "write_workspace_file": lambda args: file_tools.write_file(args.get("path", ""), args.get("content", "")),
-    "delete_workspace_path": _delete_workspace_path,
 }
 
 
@@ -970,6 +1001,13 @@ def _build_tool_impl(user_id: str) -> dict:
         ),
         "create_calendar_event": lambda args: _create_calendar_event(user_id, args),
         "send_email": lambda args: _send_email(user_id, args),
+        "set_reminder": lambda args: _set_reminder(user_id, args),
+        "computer_use": lambda args: _computer_use(user_id, args),
+        "write_and_test_code": lambda args: _write_and_test_code(user_id, args),
+        "list_workspace": lambda args: file_tools.list_dir(args.get("path", "."), user_id=user_id),
+        "read_workspace_file": lambda args: file_tools.read_file(args.get("path", ""), user_id=user_id),
+        "write_workspace_file": lambda args: file_tools.write_file(args.get("path", ""), args.get("content", ""), user_id=user_id),
+        "delete_workspace_path": lambda args: _delete_workspace_path(user_id, args),
     })
     return impl
 
@@ -1190,8 +1228,27 @@ def reset_conversation():
     return jsonify({"status": "cleared"})
 
 
+def _confirm_owner_denial(token):
+    """None if the signed-in session may act on this token, else a message
+    to show instead. Without this, event_stream's old broadcast-to-everyone
+    behavior meant any signed-in user could see (and, with a guessed/replayed
+    token, act on) another user's pending calendar event/email/file-delete —
+    this is the actual enforcement point now that meta carries who a
+    confirmation belongs to."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return "Please sign in first, sir."
+    meta = get_pending_meta(token)
+    if meta and meta.get("user_id") and meta["user_id"] != user_id:
+        return "That confirmation isn't yours, sir."
+    return None
+
+
 @app.route("/api/confirm/<token>", methods=["POST"])
 def confirm_action(token):
+    denial = _confirm_owner_denial(token)
+    if denial:
+        return jsonify({"response": denial, "audio": None}), 403
     approve = bool((request.json or {}).get("approve", False))
     message = resolve_confirmation(token, approve)
     audio_b64 = asyncio.run(generate_tts_base64(message))
@@ -1203,6 +1260,9 @@ def edit_confirmation(token):
     """Rewrites a still-pending proposal's fields before it's approved —
     the HUD's Edit button. Nothing executes here; it only updates what a
     subsequent /api/confirm/<token> approve will act on."""
+    denial = _confirm_owner_denial(token)
+    if denial:
+        return jsonify({"status": "error", "message": denial}), 403
     data = request.json or {}
     kind = data.get("kind")
     if kind == "calendar_event":
@@ -1224,11 +1284,6 @@ def edit_confirmation(token):
     else:
         return jsonify({"status": "error", "message": "Unknown confirmation kind."}), 400
     return jsonify(result)
-
-
-@app.route("/api/pending", methods=["GET"])
-def pending_confirmations():
-    return jsonify(list_pending())
 
 
 @app.route("/api/upcoming-events")
@@ -1327,24 +1382,51 @@ def inbox_send_reply():
 @app.route("/api/stream")
 def stream():
     """SSE feed of live progress: vision-action steps, self-heal attempts,
-    and confirmation requests. The HUD subscribes with EventSource."""
+    and confirmation requests. The HUD subscribes with EventSource.
+
+    Scoped to the signed-in user (see event_stream.py's docstring for why —
+    this used to broadcast every event to every connected tab regardless of
+    whose it was). user_id is read here, before entering the generator,
+    since `session` isn't reliably readable once inside a streaming
+    generator without stream_with_context — an anonymous/not-yet-signed-in
+    tab still gets a live connection, it just never receives anything,
+    which is correct since it has no user to receive events on behalf of."""
+    user_id = session.get("user_id")
+
     def gen():
-        q = event_stream.subscribe()
+        q = event_stream.subscribe(user_id) if user_id else None
         try:
             while True:
                 try:
+                    if q is None:
+                        raise queue.Empty
                     event = q.get(timeout=15)
                     yield event_stream.format_sse(event)
                 except queue.Empty:
                     yield ": keepalive\n\n"
         finally:
-            event_stream.unsubscribe(q)
+            if q is not None:
+                event_stream.unsubscribe(user_id, q)
 
     return Response(
         gen(),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# Started at import time (not inside `if __name__ == "__main__"`) so it
+# actually runs under gunicorn too — Render's `gunicorn app:app` imports
+# this module without ever executing the __main__ block below, so the old
+# __main__-only call never fired in production at all. Safe with exactly
+# one worker (this app's fixed --workers 1): each worker process would
+# otherwise start its own copy and double/triple-fire reminders and the
+# weekly summary. The WERKZEUG_RUN_MAIN check still exists for local `python
+# app.py` debug-mode runs, where Werkzeug's reloader re-executes this module
+# in a child process — gunicorn never sets that env var, so this always
+# proceeds to start it exactly once there.
+if os.environ.get("FLASK_DEBUG", "false").lower() != "true" or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    daily_briefing.start_scheduler()
 
 
 if __name__ == "__main__":
@@ -1374,13 +1456,6 @@ if __name__ == "__main__":
                 "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" "
                 "| Select ProcessId,CommandLine"
             )
-
-    # With debug=True, Werkzeug's reloader re-executes this module in a
-    # child process and WERKZEUG_RUN_MAIN is only set in that child — this
-    # guard stops the parent watcher process from also starting a scheduler
-    # thread, which would otherwise push every daily briefing twice.
-    if not debug_mode or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        daily_briefing.start_scheduler()
 
     webbrowser.open(f"http://127.0.0.1:{port}")
     app.run(host=host, port=port, debug=debug_mode, threaded=True)

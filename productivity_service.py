@@ -21,12 +21,14 @@ action in the codebase, not a special case just for this feature.
 
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from zoneinfo import ZoneInfo
 
 import google_service
 import microsoft_service
+import users
 from guardrails import request_confirmation, get_pending_meta, update_pending
 
 logger = logging.getLogger("jarvis.productivity")
@@ -242,6 +244,24 @@ def get_daily_agenda_text(user_id: str) -> str:
     return "\n".join(parts)
 
 
+def get_weekly_summary_text(user_id: str) -> str:
+    """Same zero-LLM philosophy as get_daily_agenda_text — this is what
+    daily_briefing.py's scheduler emails out once a week, unattended, so it
+    can't depend on a Groq call succeeding."""
+    if not any_calendar_configured():
+        return "No calendar is connected, sir — see the README to set one up."
+
+    events = _collect_events(user_id, days_ahead=7, max_results=30) or []
+    if not events:
+        return "Nothing on your calendar for the week ahead, sir."
+
+    parts = [f"Your week ahead — {len(events)} item(s):"]
+    for e in events:
+        where = f" at {e['location']}" if e.get("location") else ""
+        parts.append(f"  {_format_time(e['start'])} — {e['summary']}{where}")
+    return "\n".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # Writes — always confirm-gated, never fire immediately
 # ---------------------------------------------------------------------------
@@ -378,3 +398,28 @@ def edit_pending_email(token: str, to: str, subject: str, body: str) -> dict:
         "kind": "email",
         "details": {"to": to, "subject": subject, "body": body, "provider": target.title()},
     }
+
+
+def request_set_reminder(user_id: str, text: str, remind_at_iso: str) -> dict:
+    """Reminders don't go through the confirm-to-act gate that calendar
+    events/emails do — unlike those, nothing external happens and nobody
+    else is affected; it's a note-to-self stored in our own database, not
+    an action on the user's real calendar/mailbox. Delivered later by
+    daily_briefing.py's scheduler emailing the user (see that module for
+    why: SSE only reaches a tab that's currently open, and a reminder is
+    useless if it only "arrives" while you're already staring at the
+    screen it would have popped up on)."""
+    try:
+        dt = datetime.fromisoformat(remind_at_iso)
+    except (ValueError, TypeError):
+        return {"status": "error", "message": "I couldn't understand that time, sir."}
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=LOCAL_TZ)
+
+    remind_at_epoch = dt.timestamp()
+    if remind_at_epoch <= time.time():
+        return {"status": "error", "message": "That time is already in the past, sir."}
+
+    users.add_reminder(user_id, text, remind_at_epoch)
+    when_label = dt.astimezone(LOCAL_TZ).strftime("%A, %B %d at %H:%M")
+    return {"status": "ok", "message": f"I'll remind you to {text} on {when_label}, sir."}

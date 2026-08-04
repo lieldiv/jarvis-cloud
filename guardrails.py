@@ -64,24 +64,63 @@ def ensure_workspace():
     os.makedirs(os.path.join(WORKSPACE_DIR, "tmp"), exist_ok=True)
 
 
+def _safe_user_segment(user_id: str) -> str:
+    """user_id is Google's 'sub' claim — normally just digits — but treat it
+    as untrusted input anyway rather than assuming: strip anything that
+    isn't alphanumeric so it can never be used to escape the per-user
+    directory it's about to become a path segment of."""
+    cleaned = "".join(c for c in (user_id or "") if c.isalnum())
+    if not cleaned:
+        raise SandboxViolation("Missing or invalid user id.")
+    return cleaned
+
+
+def user_workspace_dir(user_id: str) -> str:
+    """Multi-user build: every signed-in user gets their own subtree under
+    WORKSPACE_DIR (users/<id>/) instead of all sharing WORKSPACE_DIR itself
+    — without this, one user's write_workspace_file/write_and_test_code
+    calls would be readable, overwritable, and deletable by every other
+    signed-in user, since file_tools.py and self_healing.py have no other
+    concept of "whose" file something is."""
+    base = os.path.realpath(os.path.join(WORKSPACE_DIR, "users", _safe_user_segment(user_id)))
+    if os.path.commonpath([base, WORKSPACE_DIR]) != WORKSPACE_DIR:
+        raise SandboxViolation("Invalid user id.")
+    return base
+
+
+def ensure_user_workspace(user_id: str) -> str:
+    base = user_workspace_dir(user_id)
+    os.makedirs(base, exist_ok=True)
+    os.makedirs(os.path.join(base, "sandbox_scripts"), exist_ok=True)
+    return base
+
+
 class SandboxViolation(PermissionError):
     pass
 
 
-def resolve_safe_path(user_path: str) -> str:
-    """Resolve user_path relative to WORKSPACE_DIR and guarantee the result
-    is still inside it. Raises SandboxViolation otherwise. This is the ONLY
-    function in the codebase allowed to turn a user/LLM-supplied path string
-    into a real filesystem path for file_tools or self_healing to use.
+def resolve_safe_path(user_path: str, user_id: str = None) -> str:
+    """Resolve user_path relative to the sandbox root and guarantee the
+    result is still inside it. Raises SandboxViolation otherwise. This is
+    the ONLY function in the codebase allowed to turn a user/LLM-supplied
+    path string into a real filesystem path for file_tools or self_healing
+    to use.
+
+    `user_id`, when given, confines resolution to that user's own subtree
+    (see user_workspace_dir) rather than the shared WORKSPACE_DIR root —
+    every multi-user caller must pass it. Its absence is only for
+    single-tenant callers (the desktop build has no concept of "users").
     """
     if not user_path or not isinstance(user_path, str):
         raise SandboxViolation("Empty or invalid path.")
 
+    root = user_workspace_dir(user_id) if user_id else WORKSPACE_DIR
+
     # Treat the incoming path as relative to the workspace even if it looks
     # absolute or tries to climb out with "..". realpath collapses "..".
-    candidate = os.path.realpath(os.path.join(WORKSPACE_DIR, user_path.lstrip("/\\")))
+    candidate = os.path.realpath(os.path.join(root, user_path.lstrip("/\\")))
 
-    if os.path.commonpath([candidate, WORKSPACE_DIR]) != WORKSPACE_DIR:
+    if os.path.commonpath([candidate, root]) != root:
         raise SandboxViolation(
             f"'{user_path}' resolves outside the JARVIS workspace. Refused."
         )

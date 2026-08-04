@@ -32,7 +32,7 @@ import sys
 import time
 import uuid
 
-from guardrails import resolve_safe_path, ensure_workspace, WORKSPACE_DIR
+from guardrails import resolve_safe_path, ensure_workspace, ensure_user_workspace, WORKSPACE_DIR
 
 logger = logging.getLogger("jarvis.self_healing")
 
@@ -57,13 +57,22 @@ STDERR / TRACEBACK:
 """
 
 
-def run_in_sandbox(code: str) -> dict:
+def run_in_sandbox(code: str, user_id: str = None) -> dict:
     """Write `code` to a fresh file under sandbox_scripts and execute it.
     Returns {"success": bool, "stdout": str, "stderr": str, "returncode": int}.
+
+    `user_id`, when given, confines this to that user's own subtree of the
+    workspace (see guardrails.user_workspace_dir) — without it, every
+    signed-in user's self-healing attempts would land in the same shared
+    sandbox_scripts folder, each able to see/overwrite the others'.
     """
-    ensure_workspace()
+    if user_id:
+        cwd = ensure_user_workspace(user_id)
+    else:
+        ensure_workspace()
+        cwd = WORKSPACE_DIR
     fname = f"attempt_{uuid.uuid4().hex[:8]}.py"
-    script_path = resolve_safe_path(os.path.join("sandbox_scripts", fname))
+    script_path = resolve_safe_path(os.path.join("sandbox_scripts", fname), user_id=user_id)
 
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(code)
@@ -71,7 +80,7 @@ def run_in_sandbox(code: str) -> dict:
     try:
         proc = subprocess.run(
             [sys.executable, script_path],
-            cwd=WORKSPACE_DIR,
+            cwd=cwd,
             capture_output=True,
             text=True,
             timeout=EXEC_TIMEOUT_SECONDS,
@@ -103,7 +112,7 @@ def _ask_llm_to_fix(groq_client, model_name: str, goal: str, code: str, stdout: 
     return text.removeprefix("```python").removeprefix("```").removesuffix("```").strip()
 
 
-def self_healing_code_loop(groq_client, model_name: str, goal: str, initial_code: str, on_attempt=None) -> dict:
+def self_healing_code_loop(groq_client, model_name: str, goal: str, initial_code: str, on_attempt=None, user_id: str = None) -> dict:
     """Run `initial_code`, and if it fails, iteratively ask the LLM to fix it
     and re-run, up to MAX_ITERATIONS. `on_attempt(info)` is an optional
     callback for streaming progress into the HUD log.
@@ -115,7 +124,7 @@ def self_healing_code_loop(groq_client, model_name: str, goal: str, initial_code
     result = None
 
     for attempt in range(1, MAX_ITERATIONS + 1):
-        result = run_in_sandbox(code)
+        result = run_in_sandbox(code, user_id=user_id)
         if on_attempt:
             on_attempt({
                 "attempt": attempt,
