@@ -1278,17 +1278,20 @@ def inbox_draft_reply():
     prompt = (
         f"Original email — From: {sender_name}. Subject: {subject}. Preview: {snippet}\n\n"
         f"What the user wants to say in reply: {instructions}\n\n"
-        "Write ONLY the reply email body as plain text. No subject line, no markdown, "
-        "no placeholders like [Your Name] — keep it concise and polite."
+        "Write ONLY the reply email body as plain text — a short greeting, then a "
+        "few sentences that naturally develop the point above in your own words "
+        "(don't just restate it tersely in one line), then a polite closing. No "
+        "subject line, no markdown, no placeholders like [Your Name]. Match the "
+        "language the instructions above are written in."
     )
     try:
         completion = groq_client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You draft concise, polite plain-text email replies for J.A.R.V.I.S., an assistant. Output only the email body, nothing else."},
+                {"role": "system", "content": "You draft warm, professional plain-text email replies for J.A.R.V.I.S., an assistant — a real reply with a greeting and closing, not a one-line brush-off. Output only the email body, nothing else."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.5, max_tokens=400,
+            temperature=0.6, max_tokens=400,
         )
         draft = _strip_markdown(completion.choices[0].message.content or "").strip()
         return jsonify({"draft": draft})
