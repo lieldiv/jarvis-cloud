@@ -560,9 +560,9 @@
         </div>
         <div class="google-account-ctrl" id="google-account-ctrl" style="display:none;">
             <span class="acct-dot"></span>
-            <span class="acct-label">GOOGLE CONNECTED</span>
-            <button class="acct-btn" onclick="switchGoogleAccount()">⇄ SWITCH ACCOUNT</button>
-            <button class="acct-btn" onclick="disconnectGoogle()">⏻ DISCONNECT</button>
+            <span class="acct-label">Google מחובר</span>
+            <button class="acct-btn" onclick="switchGoogleAccount()">⇄ החלף חשבון</button>
+            <button class="acct-btn" onclick="disconnectGoogle()">⏻ נתק</button>
         </div>
         <div style="text-align: right;">
             <div class="header-time" id="live-clock">00:00:00</div>
@@ -573,23 +573,23 @@
     <div class="google-gate" id="google-gate" onclick="event.stopPropagation()">
         <div class="gate-card">
             <div class="gate-emblem"><span>G</span></div>
-            <div class="gate-title">SIGN IN TO CONTINUE</div>
-            <div class="gate-subtitle">Sir, sign in with Google to get your own J.A.R.V.I.S. — this both identifies you and connects your schedule and inbox, in one step.</div>
+            <div class="gate-title">התחבר כדי להמשיך</div>
+            <div class="gate-subtitle">אדוני, התחבר עם Google כדי לקבל את ה-J.A.R.V.I.S האישי שלך — זה גם מזהה אותך וגם מחבר את היומן ותיבת הדואר שלך, בצעד אחד.</div>
             <div class="gate-perms">
-                <div class="gate-perm"><span class="ic">🪪</span> Identity — who you are, so this is your account and your data, not anyone else's</div>
-                <div class="gate-perm"><span class="ic">📅</span> Calendar — read your agenda &amp; create events (always with your approval first)</div>
-                <div class="gate-perm"><span class="ic">✉️</span> Gmail — read summaries &amp; send messages (always with your approval first)</div>
+                <div class="gate-perm"><span class="ic">🪪</span> זהות — מי שאתה, כדי שזה יהיה החשבון והנתונים שלך, ולא של אף אחד אחר</div>
+                <div class="gate-perm"><span class="ic">📅</span> יומן — קריאת סדר היום ויצירת אירועים (תמיד באישורך מראש)</div>
+                <div class="gate-perm"><span class="ic">✉️</span> Gmail — קריאת סיכומים ושליחת הודעות (תמיד באישורך מראש)</div>
             </div>
-            <a class="gate-btn" href="/auth/google/start">🔐 SIGN IN WITH GOOGLE</a>
-            <div class="gate-note">Handled entirely by Google's own sign-in page — JARVIS never sees your password.</div>
+            <a class="gate-btn" href="/auth/google/start">🔐 התחבר עם Google</a>
+            <div class="gate-note">מתבצע כולו דרך דף ההתחברות של גוגל עצמו — JARVIS אף פעם לא רואה את הסיסמה שלך.</div>
             <div class="gate-error" id="gate-error" dir="auto"></div>
         </div>
     </div>
 
     <div class="mic-gate" id="mic-gate">
         <div class="mic-card">
-            <div class="mic-title" id="mic-title" dir="auto">SCANNING MICROPHONE...</div>
-            <div class="mic-subtitle" id="mic-subtitle">Requesting access…</div>
+            <div class="mic-title" id="mic-title" dir="auto">סורק מיקרופון...</div>
+            <div class="mic-subtitle" id="mic-subtitle">מבקש גישה…</div>
             <div class="mic-scan-visual" id="mic-scan-visual">
                 <div class="mic-level-wrap"><div class="mic-level-bar" id="mic-level-bar"></div></div>
             </div>
@@ -597,103 +597,103 @@
                 <div class="mic-listen-dot"></div>
             </div>
             <div class="mic-error" id="mic-error" dir="auto"></div>
-            <button class="gate-btn" id="mic-retry-btn" style="display:none;" onclick="runMicScan()">🔄 RETRY</button>
-            <button class="gate-btn" id="mic-text-fallback-btn" style="display:none; margin-top:12px; background: rgba(255,200,0,0.15); border-color: var(--user-gold); color: var(--user-gold);" onclick="continueWithTextOnly()">⌨️ CONTINUE WITH TEXT INPUT</button>
+            <button class="gate-btn" id="mic-retry-btn" style="display:none;" onclick="runMicScan()">🔄 נסה שוב</button>
+            <button class="gate-btn" id="mic-text-fallback-btn" style="display:none; margin-top:12px; background: rgba(255,200,0,0.15); border-color: var(--user-gold); color: var(--user-gold);" onclick="continueWithTextOnly()">⌨️ המשך עם קלט טקסט</button>
         </div>
     </div>
 
     <div class="confirm-overlay" id="confirm-overlay">
         <div class="confirm-modal">
-            <div class="confirm-title" id="confirm-title">AWAITING YOUR APPROVAL</div>
+            <div class="confirm-title" id="confirm-title">ממתין לאישורך</div>
             <div class="confirm-fields" id="confirm-fields"></div>
             <div class="confirm-actions" id="confirm-actions-view">
-                <button class="btn btn-wake" onclick="resolveConfirmation(true)">✅ APPROVE</button>
-                <button class="btn btn-edit" onclick="enterConfirmEditMode()">✎ EDIT</button>
-                <button class="btn btn-interrupt" onclick="resolveConfirmation(false)">✖ CANCEL</button>
+                <button class="btn btn-wake" onclick="resolveConfirmation(true)">✅ אשר</button>
+                <button class="btn btn-edit" onclick="enterConfirmEditMode()">✎ ערוך</button>
+                <button class="btn btn-interrupt" onclick="resolveConfirmation(false)">✖ בטל</button>
             </div>
             <div class="confirm-actions" id="confirm-actions-edit" style="display: none;">
-                <button class="btn btn-wake" onclick="saveConfirmEdit()">💾 SAVE</button>
-                <button class="btn btn-reset" onclick="exitConfirmEditMode()">↩ CANCEL EDIT</button>
+                <button class="btn btn-wake" onclick="saveConfirmEdit()">💾 שמור</button>
+                <button class="btn btn-reset" onclick="exitConfirmEditMode()">↩ בטל עריכה</button>
             </div>
         </div>
     </div>
 
     <div class="confirm-overlay" id="switch-account-overlay">
         <div class="confirm-modal">
-            <div class="confirm-title">▸ SWITCH ACCOUNT</div>
+            <div class="confirm-title">▸ החלפת חשבון</div>
             <div class="confirm-fields" id="switch-account-list"></div>
             <div class="confirm-actions">
-                <button class="btn btn-reset" onclick="closeSwitchAccountModal()">✖ CLOSE</button>
+                <button class="btn btn-reset" onclick="closeSwitchAccountModal()">✖ סגור</button>
             </div>
         </div>
     </div>
 
     <div class="confirm-overlay" id="compose-overlay">
         <div class="confirm-modal">
-            <div class="confirm-title">▸ COMPOSE EMAIL</div>
+            <div class="confirm-title">▸ כתיבת אימייל</div>
             <div class="confirm-fields">
                 <div class="confirm-field editing">
-                    <span class="k">To</span>
+                    <span class="k">אל</span>
                     <input type="email" id="compose-to" placeholder="recipient@example.com">
                 </div>
                 <div class="confirm-field editing">
-                    <span class="k">Reason</span>
-                    <input type="text" id="compose-instructions" placeholder="What do you want to say?">
+                    <span class="k">סיבה</span>
+                    <input type="text" id="compose-instructions" placeholder="מה תרצה להגיד?">
                 </div>
                 <div class="confirm-field editing">
-                    <span class="k">Files</span>
+                    <span class="k">קבצים</span>
                     <div class="file-picker">
                         <input type="file" id="compose-files-input" multiple style="display: none;" onchange="handleComposeFilesChosen(this.files)">
-                        <button type="button" class="btn btn-edit file-picker-btn" onclick="document.getElementById('compose-files-input').click()">📎 ATTACH FILES</button>
+                        <button type="button" class="btn btn-edit file-picker-btn" onclick="document.getElementById('compose-files-input').click()">📎 צרף קבצים</button>
                         <div class="file-chip-list" id="compose-file-chips"></div>
                     </div>
                 </div>
             </div>
             <div class="confirm-actions" id="compose-actions-draft">
-                <button class="btn btn-edit" onclick="draftComposeEmail()">✍️ DRAFT</button>
-                <button class="btn btn-reset" onclick="closeComposeModal()">✖ CANCEL</button>
+                <button class="btn btn-edit" onclick="draftComposeEmail()">✍️ נסח</button>
+                <button class="btn btn-reset" onclick="closeComposeModal()">✖ בטל</button>
             </div>
             <div class="confirm-fields" id="compose-draft-fields" style="display: none;">
                 <div class="confirm-field editing">
-                    <span class="k">Subject</span>
+                    <span class="k">נושא</span>
                     <input type="text" id="compose-subject">
                 </div>
                 <div class="confirm-field editing">
-                    <span class="k">Body</span>
+                    <span class="k">גוף ההודעה</span>
                     <textarea id="compose-body"></textarea>
                 </div>
             </div>
             <div class="confirm-actions" id="compose-actions-send" style="display: none;">
-                <button class="btn btn-wake" onclick="sendComposeEmail()">📤 SEND</button>
-                <button class="btn btn-reset" onclick="closeComposeModal()">✖ CANCEL</button>
+                <button class="btn btn-wake" onclick="sendComposeEmail()">📤 שלח</button>
+                <button class="btn btn-reset" onclick="closeComposeModal()">✖ בטל</button>
             </div>
         </div>
     </div>
 
     <div class="inbox-overlay" id="inbox-overlay">
         <div class="inbox-modal">
-            <div class="confirm-title">▸ INBOX</div>
-            <div class="inbox-summary" id="inbox-summary">Loading…</div>
+            <div class="confirm-title">▸ תיבת דואר</div>
+            <div class="inbox-summary" id="inbox-summary">טוען…</div>
             <div class="inbox-list" id="inbox-list"></div>
             <div class="confirm-actions">
-                <button class="btn btn-reset" onclick="closeInboxModal()">✖ CLOSE</button>
+                <button class="btn btn-reset" onclick="closeInboxModal()">✖ סגור</button>
             </div>
         </div>
     </div>
 
     <div class="hud-grid">
         <div class="panel">
-            <div class="panel-header"><span>▸ CONTROL</span><span>JARVIS</span></div>
+            <div class="panel-header"><span>▸ בקרה</span><span>JARVIS</span></div>
             <div class="quick-actions" style="margin-top: 0;">
-                <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar today?&quot;)">📅 TODAY'S AGENDA</button>
-                <button class="qa-btn" onclick="openInboxModal()">✉️ CHECK INBOX</button>
-                <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar this week?&quot;)">📆 THIS WEEK</button>
-                <button class="qa-btn" onclick="openComposeModal()">📝 DRAFT EMAIL</button>
-                <button class="qa-btn" onclick="resetMemory()">🧹 CLEAR MEMORY</button>
+                <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar today?&quot;)">📅 סדר היום</button>
+                <button class="qa-btn" onclick="openInboxModal()">✉️ בדוק דואר</button>
+                <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar this week?&quot;)">📆 השבוע</button>
+                <button class="qa-btn" onclick="openComposeModal()">📝 נסח אימייל</button>
+                <button class="qa-btn" onclick="resetMemory()">🧹 נקה זיכרון</button>
             </div>
 
             <div class="upcoming-events" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
-                <div class="mini-chart-label">▸ UPCOMING</div>
+                <div class="mini-chart-label">▸ קרוב</div>
                 <div class="events-box" id="events-box" style="overflow-y: auto;">
                     <div class="events-empty">—</div>
                 </div>
@@ -702,7 +702,7 @@
 
         <div class="panel center-hud sleeping" id="hud-core">
             <div class="holo-screen" id="holo-screen">
-                <div class="holo-title">J.A.R.V.I.S // DATA UPLINK</div>
+                <div class="holo-title">J.A.R.V.I.S // העברת נתונים</div>
                 <div class="holo-data" id="holo-data" dir="auto"></div>
             </div>
             <div class="arc-wrapper" id="arc-wrapper" onclick="triggerWake()">
@@ -719,30 +719,30 @@
                 <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
             </div>
             <div class="status-tag hint-pulse" id="status-tag">
-                <div class="status-dot"></div><span id="status-text" dir="auto">CLICK TO ENABLE MIC</span>
+                <div class="status-dot"></div><span id="status-text" dir="auto">לחץ להפעלת המיקרופון</span>
             </div>
         </div>
 
         <div class="panel">
-            <div class="panel-header"><span>▸ COMMAND LOG</span><span>TERMINAL</span></div>
-            <div class="mini-chart-label">▸ SIGNAL</div>
+            <div class="panel-header"><span>▸ יומן פקודות</span><span>מסוף</span></div>
+            <div class="mini-chart-label">▸ אות</div>
             <div class="mini-chart-wrap"><canvas id="mini-chart" width="300" height="34"></canvas></div>
             <div class="log-box" id="log-box">
                 <div class="log-entry sys">SYS: System initialized.</div>
                 <div class="log-entry sys">SYS: Voice Neural Engine Ready.</div>
                 <div class="log-entry jarvis">J.A.R.V.I.S: Please click anywhere to enable listening.</div>
             </div>
-            <input type="text" class="cmd-input" id="cmd-input" placeholder="Type or speak a command..." onkeydown="if(event.key==='Enter') sendCommand(this.value)">
+            <input type="text" class="cmd-input" id="cmd-input" placeholder="הקלד או דבר פקודה..." onkeydown="if(event.key==='Enter') sendCommand(this.value)">
             <div class="btn-group">
-                <button class="btn btn-interrupt" onclick="triggerStop()">🔴 STOP [ESC]</button>
-                <button class="btn btn-wake" onclick="triggerWake()">⚡ WAKE UP</button>
-                <button class="btn btn-reset" onclick="resetMemory()">🧹 RESET</button>
+                <button class="btn btn-interrupt" onclick="triggerStop()">🔴 עצור [ESC]</button>
+                <button class="btn btn-wake" onclick="triggerWake()">⚡ התעורר</button>
+                <button class="btn btn-reset" onclick="resetMemory()">🧹 איפוס</button>
             </div>
         </div>
     </div>
 
     <footer>
-        <div id="footer-mic-status">MIC STATUS: ONLINE &nbsp;|&nbsp; EDGE-TTS VOICE SYSTEM</div>
+        <div id="footer-mic-status">סטטוס מיקרופון: פעיל &nbsp;|&nbsp; מערכת קול EDGE-TTS</div>
         <div>STARK INDUSTRIES &nbsp;|&nbsp; MARK LI ARCHITECTURE</div>
     </footer>
 
@@ -791,8 +791,8 @@
             document.getElementById('mic-listen-visual').style.display = 'none';
             document.getElementById('mic-scan-visual').style.display = 'block';
             document.getElementById('mic-level-bar').style.width = '0%';
-            title.innerText = 'SCANNING MICROPHONE...';
-            subtitle.innerText = 'Requesting access…';
+            title.innerText = 'סורק מיקרופון...';
+            subtitle.innerText = 'מבקש גישה…';
 
             if (!window.isSecureContext || !navigator.mediaDevices) {
                 // Browsers refuse getUserMedia (and often SpeechRecognition
@@ -801,9 +801,9 @@
                 // this is the single most likely way a real user hits this
                 // modal on mobile, so it gets its own accurate message
                 // instead of being lumped in with "permission denied".
-                title.innerText = 'VOICE NEEDS A SECURE CONNECTION';
+                title.innerText = 'הקול דורש חיבור מאובטח';
                 subtitle.innerText = '';
-                errorEl.innerText = "This page is loaded over an insecure connection (common when reached via LAN/phone as http://<ip>:port), sir — browsers block microphone access unless it's HTTPS or localhost. Text input still works fully; see README for enabling HTTPS if you want voice from your phone too.";
+                errorEl.innerText = 'הדף הזה נטען דרך חיבור לא מאובטח (נפוץ כשנכנסים דרך רשת מקומית/טלפון בכתובת http://<ip>:port), אדוני — דפדפנים חוסמים גישה למיקרופון אלא אם זה HTTPS או localhost. קלט טקסט עדיין עובד במלואו; ראה את קובץ ה-README להפעלת HTTPS אם אתה רוצה גם קול מהטלפון.';
                 errorEl.classList.add('show');
                 document.getElementById('mic-text-fallback-btn').style.display = 'inline-flex';
                 return;
@@ -811,16 +811,16 @@
             try {
                 micTestStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (e) {
-                title.innerText = 'MICROPHONE BLOCKED';
+                title.innerText = 'המיקרופון חסום';
                 subtitle.innerText = '';
-                errorEl.innerText = 'Microphone access denied, sir. Allow it in your browser settings and retry — or continue with text below.';
+                errorEl.innerText = 'הגישה למיקרופון נדחתה, אדוני. אפשר אותה בהגדרות הדפדפן ונסה שוב — או המשך עם טקסט למטה.';
                 errorEl.classList.add('show');
                 retryBtn.style.display = 'inline-flex';
                 document.getElementById('mic-text-fallback-btn').style.display = 'inline-flex';
                 return;
             }
 
-            subtitle.innerText = 'Say something, sir…';
+            subtitle.innerText = 'אמור משהו, אדוני…';
             micTestAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const source = micTestAudioCtx.createMediaStreamSource(micTestStream);
             const analyser = micTestAudioCtx.createAnalyser();
@@ -850,7 +850,7 @@
             if (micTestStream) { micTestStream.getTracks().forEach(t => t.stop()); micTestStream = null; }
             if (micTestAudioCtx) { micTestAudioCtx.close(); micTestAudioCtx = null; }
 
-            document.getElementById('mic-title').innerText = 'MICROPHONE ONLINE ✓';
+            document.getElementById('mic-title').innerText = 'המיקרופון פעיל ✓';
             document.getElementById('mic-subtitle').innerText = '';
             document.getElementById('mic-level-bar').style.width = '100%';
             setTimeout(startWakePhraseStep, 500);
@@ -866,8 +866,8 @@
                 // for a wake word it can never hear; tell them plainly and
                 // hand them a way through.
                 document.getElementById('mic-listen-visual').style.display = 'none';
-                document.getElementById('mic-title').innerText = 'VOICE INPUT NOT SUPPORTED';
-                document.getElementById('mic-subtitle').innerText = 'This browser can\'t do speech recognition (common on iOS Safari) — you can still type every command.';
+                document.getElementById('mic-title').innerText = 'קלט קולי אינו נתמך';
+                document.getElementById('mic-subtitle').innerText = 'הדפדפן הזה לא תומך בזיהוי דיבור (נפוץ ב-iOS Safari) — אפשר עדיין להקליד כל פקודה.';
                 document.getElementById('status-tag').classList.remove('hint-pulse');
                 document.getElementById('mic-text-fallback-btn').style.display = 'inline-flex';
                 return;
@@ -875,7 +875,7 @@
 
             document.getElementById('mic-listen-visual').style.display = 'block';
             document.getElementById('mic-title').innerText = 'אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
-            document.getElementById('mic-subtitle').innerText = 'Listening…';
+            document.getElementById('mic-subtitle').innerText = 'מאזין…';
             document.getElementById('status-tag').classList.remove('hint-pulse');
 
             if (!micInitialized) {
@@ -894,7 +894,7 @@
             addLog('SYS: Voice input isn\'t available in this browser — type commands in the box below instead.', 'sys');
             isAwake = true;
             setHudState('LISTENING');
-            document.getElementById('status-text').innerText = 'TEXT MODE — VOICE UNAVAILABLE';
+            document.getElementById('status-text').innerText = 'מצב טקסט — קול לא זמין';
         }
 
         // --- Google sign-in gate ------------------------------------------
@@ -1003,7 +1003,7 @@
                 const forget = document.createElement('button');
                 forget.className = 'forget-btn';
                 forget.textContent = '✕';
-                forget.title = 'Forget this account';
+                forget.title = 'שכח חשבון זה';
                 forget.onclick = (ev) => { ev.stopPropagation(); forgetAccount(email); };
                 row.append(label, forget);
                 row.onclick = () => label.onclick();
@@ -1012,7 +1012,7 @@
 
             const addRow = document.createElement('div');
             addRow.className = 'acct-row add-new';
-            addRow.textContent = '+ SIGN IN WITH A DIFFERENT ACCOUNT';
+            addRow.textContent = '+ התחבר עם חשבון אחר';
             addRow.onclick = () => { window.location.href = '/auth/google/start'; };
             box.appendChild(addRow);
         }
@@ -1062,7 +1062,7 @@
                 remove.type = 'button';
                 remove.className = 'remove-chip';
                 remove.textContent = '✕';
-                remove.title = 'Remove';
+                remove.title = 'הסר';
                 remove.onclick = () => {
                     composeSelectedFiles.splice(i, 1);
                     renderComposeFileChips();
@@ -1378,8 +1378,8 @@
         // both check pendingConfirmToken before forwarding anything to the LLM.
 
         const CONFIRM_TITLES = {
-            calendar_event: 'PROPOSED CALENDAR EVENT',
-            email: 'PROPOSED EMAIL',
+            calendar_event: 'הצעת אירוע ביומן',
+            email: 'הצעת אימייל',
         };
 
         function formatDateTimeRange(startIso, endIso) {
@@ -1431,29 +1431,29 @@
         }
 
         function renderConfirmReadView(evt) {
-            document.getElementById('confirm-title').innerText = CONFIRM_TITLES[evt.kind] || 'CONFIRMATION REQUIRED';
+            document.getElementById('confirm-title').innerText = CONFIRM_TITLES[evt.kind] || 'נדרש אישור';
             const fieldsBox = document.getElementById('confirm-fields');
             fieldsBox.innerHTML = '';
             const d = evt.details;
 
             if (evt.kind === 'calendar_event' && d) {
                 [
-                    fieldRow('Title', d.summary),
-                    fieldRow('When', formatDateTimeRange(d.start_iso, d.end_iso)),
-                    fieldRow('Where', d.location),
-                    fieldRow('Notes', d.description),
-                    fieldRow('Calendar', d.provider),
+                    fieldRow('כותרת', d.summary),
+                    fieldRow('מתי', formatDateTimeRange(d.start_iso, d.end_iso)),
+                    fieldRow('היכן', d.location),
+                    fieldRow('הערות', d.description),
+                    fieldRow('יומן', d.provider),
                 ].forEach(el => { if (el) fieldsBox.appendChild(el); });
             } else if (evt.kind === 'email' && d) {
                 [
-                    fieldRow('To', d.to),
-                    fieldRow('Subject', d.subject),
-                    fieldRow('Message', d.body),
-                    fieldRow('Attachments', (d.attachments || []).join(', ')),
-                    fieldRow('Via', d.provider),
+                    fieldRow('אל', d.to),
+                    fieldRow('נושא', d.subject),
+                    fieldRow('הודעה', d.body),
+                    fieldRow('קבצים מצורפים', (d.attachments || []).join(', ')),
+                    fieldRow('דרך', d.provider),
                 ].forEach(el => { if (el) fieldsBox.appendChild(el); });
             } else {
-                const el = fieldRow('Action', evt.message);
+                const el = fieldRow('פעולה', evt.message);
                 if (el) fieldsBox.appendChild(el);
             }
         }
@@ -1465,17 +1465,17 @@
 
             if (evt.kind === 'calendar_event' && d) {
                 [
-                    editFieldRow('Title', 'confirm-edit-summary', d.summary),
-                    editFieldRow('Start', 'confirm-edit-start', isoToLocalInputValue(d.start_iso)),
-                    editFieldRow('End', 'confirm-edit-end', isoToLocalInputValue(d.end_iso)),
-                    editFieldRow('Where', 'confirm-edit-location', d.location),
-                    editFieldRow('Notes', 'confirm-edit-description', d.description, true),
+                    editFieldRow('כותרת', 'confirm-edit-summary', d.summary),
+                    editFieldRow('התחלה', 'confirm-edit-start', isoToLocalInputValue(d.start_iso)),
+                    editFieldRow('סיום', 'confirm-edit-end', isoToLocalInputValue(d.end_iso)),
+                    editFieldRow('היכן', 'confirm-edit-location', d.location),
+                    editFieldRow('הערות', 'confirm-edit-description', d.description, true),
                 ].forEach(el => fieldsBox.appendChild(el));
             } else if (evt.kind === 'email' && d) {
                 [
-                    editFieldRow('To', 'confirm-edit-to', d.to),
-                    editFieldRow('Subject', 'confirm-edit-subject', d.subject),
-                    editFieldRow('Message', 'confirm-edit-body', d.body, true),
+                    editFieldRow('אל', 'confirm-edit-to', d.to),
+                    editFieldRow('נושא', 'confirm-edit-subject', d.subject),
+                    editFieldRow('הודעה', 'confirm-edit-body', d.body, true),
                 ].forEach(el => fieldsBox.appendChild(el));
             }
         }
@@ -1651,14 +1651,14 @@
 
         async function openInboxModal() {
             document.getElementById('inbox-overlay').classList.add('show');
-            document.getElementById('inbox-summary').innerText = 'Loading…';
+            document.getElementById('inbox-summary').innerText = 'טוען…';
             document.getElementById('inbox-list').innerHTML = '';
             let data;
             try {
                 const res = await fetch('/api/inbox');
                 data = await res.json();
             } catch (e) {
-                document.getElementById('inbox-summary').innerText = 'Could not reach the server, sir.';
+                document.getElementById('inbox-summary').innerText = 'לא הצלחתי להתחבר לשרת, אדוני.';
                 return;
             }
             inboxEmailsCache = data.emails || [];
@@ -1684,7 +1684,7 @@
             const list = document.getElementById('inbox-list');
             list.innerHTML = '';
             if (!emails.length) {
-                list.innerHTML = '<div class="events-empty">Nothing unread, sir.</div>';
+                list.innerHTML = '<div class="events-empty">אין הודעות שלא נקראו, אדוני.</div>';
                 return;
             }
             emails.forEach((e, i) => {
@@ -1697,7 +1697,7 @@
 
                 const replyBtn = document.createElement('button');
                 replyBtn.className = 'inbox-reply-toggle';
-                replyBtn.textContent = '↩ REPLY';
+                replyBtn.textContent = '↩ השב';
                 replyBtn.onclick = () => document.getElementById(`inbox-reply-${i}`).classList.toggle('show');
 
                 const replyBox = document.createElement('div');
@@ -1706,28 +1706,28 @@
 
                 const instrInput = document.createElement('input');
                 instrInput.type = 'text';
-                instrInput.placeholder = 'What do you want to say?';
+                instrInput.placeholder = 'מה תרצה להגיד?';
                 instrInput.id = `inbox-instr-${i}`;
 
                 const draftBtn = document.createElement('button');
                 draftBtn.className = 'inbox-reply-toggle';
-                draftBtn.textContent = '✍️ DRAFT';
+                draftBtn.textContent = '✍️ נסח';
                 draftBtn.onclick = () => draftInboxReply(i);
 
                 const draftArea = document.createElement('textarea');
                 draftArea.id = `inbox-draft-${i}`;
                 draftArea.style.display = 'none';
-                draftArea.placeholder = 'Your editable draft will appear here — tweak it before sending.';
+                draftArea.placeholder = 'הטיוטה הניתנת לעריכה תופיע כאן — שנה אותה לפני השליחה.';
 
                 const sendRow = document.createElement('div');
                 sendRow.className = 'inbox-reply-actions';
                 sendRow.id = `inbox-send-row-${i}`;
                 sendRow.style.display = 'none';
                 const sendBtn = document.createElement('button');
-                sendBtn.className = 'btn btn-wake'; sendBtn.textContent = '📤 SEND';
+                sendBtn.className = 'btn btn-wake'; sendBtn.textContent = '📤 שלח';
                 sendBtn.onclick = () => sendInboxReply(i);
                 const cancelBtn = document.createElement('button');
-                cancelBtn.className = 'btn btn-interrupt'; cancelBtn.textContent = '✖ CANCEL';
+                cancelBtn.className = 'btn btn-interrupt'; cancelBtn.textContent = '✖ בטל';
                 cancelBtn.onclick = () => replyBox.classList.remove('show');
                 sendRow.append(sendBtn, cancelBtn);
 
@@ -1743,17 +1743,17 @@
             if (!instructions) return;
             const draftArea = document.getElementById(`inbox-draft-${i}`);
             draftArea.style.display = 'block';
-            draftArea.value = 'Drafting…';
+            draftArea.value = 'מנסח…';
             try {
                 const res = await fetch('/api/inbox/draft-reply', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sender_name: e.sender_name, subject: e.subject, snippet: e.snippet, instructions }),
                 });
                 const data = await res.json();
-                draftArea.value = data.draft || data.error || 'Could not draft a reply.';
+                draftArea.value = data.draft || data.error || 'לא הצלחתי לנסח תשובה.';
                 if (data.draft) document.getElementById(`inbox-send-row-${i}`).style.display = 'flex';
             } catch (err) {
-                draftArea.value = 'Could not reach the server, sir.';
+                draftArea.value = 'לא הצלחתי להתחבר לשרת, אדוני.';
             }
         }
 
@@ -1787,7 +1787,7 @@
                 if (!data.configured || !data.events || data.events.length === 0) {
                     const empty = document.createElement('div');
                     empty.className = 'events-empty';
-                    empty.textContent = 'Nothing coming up';
+                    empty.textContent = 'אין כלום בקרוב';
                     box.appendChild(empty);
                     return;
                 }
@@ -1843,12 +1843,12 @@
                 statusText.innerText = 'המתנה — אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
             } else if (state === 'SPEAKING') {
                 core.classList.add('speaking');
-                statusText.innerText = 'JARVIS SPEAKING...';
+                statusText.innerText = 'JARVIS מדבר...';
             } else if (state === 'PROCESSING') {
                 core.classList.add('processing');
-                statusText.innerText = 'PROCESSING...';
+                statusText.innerText = 'מעבד...';
             } else {
-                statusText.innerText = 'LISTENING — SAY "STOP" TO END';
+                statusText.innerText = 'מאזין — אמור "STOP" כדי לסיים';
             }
         }
 
