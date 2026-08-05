@@ -381,6 +381,13 @@
             background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); color: #fff;
             padding: 10px 12px; border-radius: 3px; font-family: 'Share Tech Mono', monospace;
             font-size: 14px; width: 100%;
+            /* Without this, the browser draws a datetime-local input's own
+               calendar icon / spinner arrows / popup picker in its default
+               LIGHT scheme regardless of our dark background — they end up
+               low-contrast or genuinely invisible, which is exactly what
+               looked like "editing doesn't work" (the segments you can type
+               into directly still worked; the picker controls didn't). */
+            color-scheme: dark;
         }
         .confirm-field textarea { min-height: 70px; resize: vertical; }
 
