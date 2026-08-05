@@ -110,6 +110,7 @@ ensure_workspace()
 import productivity_service
 import daily_briefing
 import google_service
+import gemini_service
 import users
 # -----------------------------------------------------------------------------
 
@@ -280,9 +281,13 @@ SYSTEM_PROMPT = (
     "when asked to write and verify a script. find_nearby_places is "
     "narrow and deliberately so — only for an explicit 'find me X near me' "
     "request, never as a general web-search fallback and never just "
-    "because you're unsure of an answer. Call the right tool instead of "
-    "guessing or saying you can't; if a command doesn't match any tool, "
-    "just respond conversationally."
+    "because you're unsure of an answer. get_current_info is equally "
+    "narrow — only for questions that genuinely need live/current "
+    "information (news, stock moves, scores, anything that could have "
+    "happened after your training), never for things you already know, "
+    "and never as a first resort out of general uncertainty. Call the "
+    "right tool instead of guessing or saying you can't; if a command "
+    "doesn't match any tool, just respond conversationally."
 )
 
 # Paint automation config — these are RELATIVE (0.0-1.0) coordinates within
@@ -733,6 +738,30 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_current_info",
+            "description": (
+                "Look up real-time or current-events information via a live "
+                "Google Search — news, stock/market moves, sports scores, "
+                "or anything else that could have happened after your own "
+                "training cutoff. ONLY use this when the question genuinely "
+                "needs up-to-date information you cannot already know. "
+                "Never use it for general knowledge you already know, and "
+                "never reach for it just because you're unsure — think "
+                "first, and only call this when the answer could plausibly "
+                "have changed since you were trained."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to look up, e.g. 'did the stock market drop this week'."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "computer_use",
             "description": (
                 "General screen control for anything without a dedicated tool: "
@@ -945,6 +974,7 @@ _STATIC_TOOL_IMPL = {
     "open_application": lambda args: open_application(args.get("app_name", "")),
     "close_application": lambda args: close_application(args.get("app_name", "")),
     "calculate": lambda args: calculate(args.get("expression", "")),
+    "get_current_info": lambda args: gemini_service.search_current_info(args.get("query", "")),
 }
 
 

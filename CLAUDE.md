@@ -18,7 +18,7 @@ device for a cloud server to control:
    to transcribe English loanwords.
 3. Flexible general-purpose agent — but trimmed hard from the original: no
    Spotify (removed — it was one server-wide shared account, not per-user
-   OAuth), no web_search/play_media (removed — both called Python's
+   OAuth), no generic web_search/play_media (removed — both called Python's
    `webbrowser.open()` **server-side**, which opens nothing on a remote
    user's device; that only worked in the original single-tenant desktop
    app because the server and the user were the same machine), no desktop
@@ -27,7 +27,11 @@ device for a cloud server to control:
    Groq entirely when this is false, not just refused at call time — saves
    tokens against the free-tier rate limit too). What's left: calculate,
    get_weather, write_and_test_code + file tools (now per-user sandboxed,
-   see below), and the schedule/email/reminder tools.
+   see below), the schedule/email/reminder tools, `find_nearby_places`
+   (confirm-to-open Google Maps search, see below), and `get_current_info`
+   (live news/stocks/current-events lookup via [gemini_service.py](gemini_service.py),
+   see below) — the last two are the only tools that touch anything outside
+   the app's own data, and both are deliberately scoped narrow.
 
 ## ⚠️ Do not confuse this with the other two JARVIS folders
 
@@ -112,6 +116,27 @@ device for a cloud server to control:
   offset. `LOCAL_TZ` (`JARVIS_TIMEZONE` env var, default `Asia/Jerusalem`)
   is used consistently for this, for `_format_time()`, and for the weekly
   scheduler's fire-time calculation.
+
+## Why get_current_info exists (Groq has no live internet access)
+
+Groq's models (everything else in this app runs on Groq — `MODEL_NAME` in
+app.py) are static, frozen at their training cutoff, with zero live internet
+access — asked "did the stock market drop this week", they can only guess
+or admit they don't know. Unlike ChatGPT's web app, JARVIS never had a real
+web-browsing tool wired in — the old `web_search` tool (removed earlier)
+only ever called `webbrowser.open()`, it never fed search results back to
+the model either.
+
+[gemini_service.py](gemini_service.py) fixes this narrowly: Google AI
+Studio's Gemini API has a genuinely free tier (no credit card) **and** a
+real Google Search grounding tool — the model actually searches and reads
+results before answering. Wired to exactly one tool, `get_current_info`,
+used only when the question needs current information the frozen Groq
+model can't know — SYSTEM_PROMPT is explicit that this isn't a general
+second LLM backend or an excuse to search reflexively (same "narrow and
+deliberately so" philosophy as `find_nearby_places`). Needs its own
+`GEMINI_API_KEY` env var (get one at https://aistudio.google.com/apikey);
+degrades to a spoken "not set up" message rather than failing if unset.
 
 ## Known gotchas
 
