@@ -260,6 +260,18 @@
         .event-cancel-btn:hover { border-color: var(--red-alert); color: var(--red-alert); background: rgba(255, 59, 59, 0.1); }
         .events-empty { font-size: 13px; color: var(--text-dim); padding: 6px 0; }
 
+        /* Deliberately NOT .qa-btn — this needs to read as part of the ▸
+           קרוב events list it's appended to, not as one more item in the
+           unrelated quick-actions button stack above it. */
+        .show-all-events-btn {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 10px; border-radius: 3px; border: 1px dashed var(--border-color);
+            background: rgba(0, 243, 255, 0.03); color: var(--text-dim); width: 100%;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; cursor: pointer;
+            transition: all 0.2s; flex-shrink: 0;
+        }
+        .show-all-events-btn:hover { border-color: var(--primary); color: var(--primary); background: rgba(0, 243, 255, 0.08); }
+
         @keyframes fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
         .center-hud { display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
@@ -2111,8 +2123,7 @@
                     upcomingEventsCache.slice(0, SIDEBAR_EVENTS_LIMIT).forEach(ev => box.appendChild(buildEventItemEl(ev)));
                     if (upcomingEventsCache.length > SIDEBAR_EVENTS_LIMIT) {
                         const moreBtn = document.createElement('button');
-                        moreBtn.className = 'qa-btn';
-                        moreBtn.style.marginTop = '2px';
+                        moreBtn.className = 'show-all-events-btn';
                         moreBtn.textContent = `📋 כל הפגישות (${upcomingEventsCache.length})`;
                         moreBtn.onclick = openAllEventsModal;
                         box.appendChild(moreBtn);
