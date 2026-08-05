@@ -1852,6 +1852,26 @@
             document.getElementById('holo-screen').style.display = 'none';
         }
 
+        // Short synthesized tone (no audio file to host/fetch) so muting/
+        // resuming is confirmed by ear, not just by the sphere's color —
+        // useful exactly when you've clicked it and immediately turned to
+        // talk to someone else instead of watching the screen.
+        function playBeep(frequency, durationSeconds) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = ctx.createOscillator();
+                const gain = ctx.createGain();
+                oscillator.connect(gain);
+                gain.connect(ctx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.value = frequency;
+                gain.gain.setValueAtTime(0.15, ctx.currentTime); // quiet — a cue, not an alert
+                oscillator.start();
+                oscillator.stop(ctx.currentTime + durationSeconds);
+                setTimeout(() => ctx.close(), durationSeconds * 1000 + 100);
+            } catch (e) { /* Web Audio unsupported/blocked — silent fallback, the color change still shows */ }
+        }
+
         // The core sphere's click target: wakes JARVIS from cold (same as
         // the WAKE UP button) if it isn't listening yet, otherwise mutes/
         // resumes the mic without ending the conversation — see micMuted's
@@ -1865,11 +1885,13 @@
             if (micMuted) {
                 if (recognition && recognitionActive) { try { recognition.stop(); } catch(e) {} }
                 setHudState('MUTED');
+                playBeep(320, 0.12); // lower tone — going quiet
             } else {
                 if (SPEECH_RECOGNITION_SUPPORTED && !recognitionActive) {
                     try { recognition.start(); } catch(e) {}
                 }
                 setHudState('LISTENING');
+                playBeep(660, 0.12); // higher tone — listening again
             }
         }
 
