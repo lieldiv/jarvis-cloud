@@ -1161,6 +1161,23 @@ def edit_confirmation(token):
     return jsonify(result)
 
 
+@app.route("/api/agenda/week")
+def agenda_week():
+    """Backs the THIS WEEK quick-action button. Deliberately bypasses the
+    LLM/tool-calling loop entirely — get_calendar_events is a real tool the
+    model can call with whatever days_ahead it decides on, and it doesn't
+    reliably pick 7 for "this week" (a run was observed defaulting to the
+    tool's days_ahead=1 fallback despite saying "here's your week" — a
+    real, confirmed bug, not a hypothetical). This route always asks for
+    a real 7-day window directly, so the one-click button is guaranteed
+    correct regardless of what the model would have chosen."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"text": "Please sign in first, sir."})
+    text = productivity_service.get_calendar_events_text(user_id, days_ahead=7, max_results=30)
+    return jsonify({"text": text})
+
+
 @app.route("/api/upcoming-events")
 def upcoming_events():
     user_id = session.get("user_id")

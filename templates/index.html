@@ -695,7 +695,7 @@
             <div class="quick-actions" style="margin-top: 0;">
                 <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar today?&quot;)">📅 סדר היום</button>
                 <button class="qa-btn" onclick="openInboxModal()">✉️ בדוק דואר</button>
-                <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar this week?&quot;)">📆 השבוע</button>
+                <button class="qa-btn" onclick="showWeekAgenda()">📆 השבוע</button>
                 <button class="qa-btn" onclick="openComposeModal()">📝 נסח אימייל</button>
                 <button class="qa-btn" onclick="sendWeeklySummaryNow()">📧 שלח סיכום שבועי עכשיו</button>
                 <button class="qa-btn" onclick="resetMemory()">🧹 נקה זיכרון</button>
@@ -1386,6 +1386,36 @@
                 }
             } catch (err) {
                 addLog('SYS: Neural connection failure.', 'sys');
+                setHudState('LISTENING');
+            }
+        }
+
+        // THIS WEEK quick-action: fetches /api/agenda/week directly (see
+        // that route's docstring for why — the model's own tool-calling
+        // choice of days_ahead isn't reliable enough to trust for a
+        // one-click "show me the week" button).
+        async function showWeekAgenda() {
+            setHudState('PROCESSING');
+            try {
+                const res = await fetch('/api/agenda/week');
+                const data = await res.json();
+                const speakRes = await fetch('/api/speak', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: data.text }),
+                });
+                const speakData = await speakRes.json();
+                if (speakData.audio) {
+                    playJarvisAudio(speakData.audio, () => {
+                        addLog(`J.A.R.V.I.S: ${data.text}`, 'jarvis');
+                        showHologram(data.text);
+                    });
+                } else {
+                    addLog(`J.A.R.V.I.S: ${data.text}`, 'jarvis');
+                    showHologram(data.text);
+                    setHudState('LISTENING');
+                }
+            } catch (err) {
+                addLog('SYS: לא הצלחתי להתחבר לשרת.', 'sys');
                 setHudState('LISTENING');
             }
         }
