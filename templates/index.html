@@ -1687,6 +1687,7 @@
                 try { evt = JSON.parse(e.data); } catch (err) { return; }
 
                 if (evt.type === 'confirmation_required') {
+                    if (evt.kind === 'web_search' && evt.details) lastNearbySearchTs = evt.details.ts;
                     addLog(`J.A.R.V.I.S: ${evt.message} (approve on screen, or say "yes"/"no")`, 'jarvis');
                     showConfirmModal(evt);
                 } else if (evt.type === 'daily_briefing') {
@@ -1712,6 +1713,32 @@
         }
 
         initEventStream();
+
+        // Polling backup for find_nearby_places' confirmation — mobile
+        // browsers drop/suspend long-lived EventSource connections (screen
+        // lock, backgrounding, carrier NAT idling it out) far more
+        // aggressively than desktop, so the SSE push above sometimes never
+        // arrives there even though the plain request/response did. This
+        // fills that gap without touching how calendar_event/email
+        // confirmations work (those still rely on the SSE push only).
+        let lastNearbySearchTs = 0;
+        setInterval(async () => {
+            if (pendingConfirmToken || pendingConfirmEvt) return; // a modal is already up
+            try {
+                const res = await fetch('/api/nearby-search/pending');
+                const data = await res.json();
+                if (data && data.ts && data.ts > lastNearbySearchTs) {
+                    lastNearbySearchTs = data.ts;
+                    const evt = {
+                        type: 'confirmation_required', kind: 'web_search',
+                        message: `Search Google Maps for '${data.query}' nearby?`,
+                        details: data,
+                    };
+                    addLog(`J.A.R.V.I.S: ${evt.message} (approve on screen, or say "yes"/"no")`, 'jarvis');
+                    showConfirmModal(evt);
+                }
+            } catch (err) { /* silent — next tick retries */ }
+        }, 4000);
 
         // --- Inbox modal: structured list (no LLM, no markdown risk),
         // zero-LLM spoken narration (same philosophy as daily_briefing.py),

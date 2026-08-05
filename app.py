@@ -898,6 +898,17 @@ def _set_reminder(user_id, args):
     return result["message"]
 
 
+# Fallback for _find_nearby_places below: on mobile, plain request/response
+# (the LLM's text reply) reliably arrives but the SSE push carrying the
+# confirmation sometimes doesn't — mobile browsers are far more aggressive
+# about suspending/dropping long-lived EventSource connections (backgrounding,
+# screen lock, carrier NAT idling out a connection) than desktop is. Rather
+# than trying to make EventSource itself more reliable, the HUD also polls
+# this tiny per-user dict as a belt-and-suspenders backup; whichever arrives
+# first (push or poll) wins, and the client dedupes on `ts`.
+_PENDING_NEARBY_SEARCH = {}  # user_id -> {"query", "url", "ts"}
+
+
 def _find_nearby_places(user_id, args):
     query = (args.get("query") or "").strip()
     if not query:
@@ -913,10 +924,12 @@ def _find_nearby_places(user_id, args):
     # touches the user's real calendar/mailbox/files, so there's nothing for
     # the usual confirm-to-act token/ownership machinery to protect.
     url = f"https://www.google.com/maps/search/{requests.utils.quote(query)}"
+    details = {"query": query, "url": url, "ts": time.time()}
+    _PENDING_NEARBY_SEARCH[user_id] = details
     event_stream.push_event({
         "type": "confirmation_required", "kind": "web_search",
         "message": f"Search Google Maps for '{query}' nearby?",
-        "details": {"query": query, "url": url},
+        "details": details,
     }, user_id=user_id)
     return f"I've drawn up a search for '{query}' nearby, sir — check the HUD to approve."
 
@@ -1477,6 +1490,18 @@ def stream():
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/api/nearby-search/pending")
+def nearby_search_pending():
+    """Polling backup for find_nearby_places — see _PENDING_NEARBY_SEARCH's
+    comment above _find_nearby_places for why this exists alongside the SSE
+    push. Returns {} if there's nothing recent for this user."""
+    user_id = session.get("user_id")
+    entry = _PENDING_NEARBY_SEARCH.get(user_id) if user_id else None
+    if not entry or time.time() - entry["ts"] > 120:
+        return jsonify({})
+    return jsonify(entry)
 
 
 # Started at import time (not inside `if __name__ == "__main__"`) so it
