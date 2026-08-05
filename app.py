@@ -1308,12 +1308,16 @@ def upcoming_events():
     user_id = session.get("user_id")
     if not user_id:
         return jsonify({"configured": False, "events": []})
-    # Was 3 — tight enough that a newly-approved event could already be
-    # bumped off the list by nearer-term existing events and never show up
-    # here at all, even though it was created fine (confirmed against the
-    # real calendar). The panel already scrolls (overflow-y: auto), so a
-    # more generous cap doesn't break the layout.
-    events = productivity_service.get_upcoming_events_structured(user_id, max_results=8)
+    # Was 3, then 8 — both turned out tight enough that a newly-approved
+    # event could already be bumped off the list by nearer-term existing
+    # events and never show up here at all, even though it was created
+    # fine (confirmed against the real calendar — reported again with 8
+    # once the user had a busier week). The panel actually scrolls now
+    # (fixed separately — it used to just silently overflow), so there's
+    # no layout reason to keep this tight; matching get_calendar_events_text's
+    # own cap (30) removes the "which cap is too small this time" question
+    # entirely instead of guessing at the next magic number.
+    events = productivity_service.get_upcoming_events_structured(user_id, max_results=30)
     if events is None:
         return jsonify({"configured": False, "events": []})
     return jsonify({"configured": True, "events": events})
