@@ -465,22 +465,40 @@
         /* --- Stocks modal: reuses .inbox-overlay/.inbox-modal for the
            backdrop/frame (also gets the same mobile backdrop-filter/
            animation overrides above for free), just its own inner layout. */
-        .stocks-search-row { display: flex; gap: 8px; margin-bottom: 18px; }
+        .stocks-search-row { display: flex; gap: 10px; margin-bottom: 22px; }
         .stocks-search-row input {
             flex: 1; background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); color: #fff;
-            padding: 10px 12px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; font-size: 14px;
+            padding: 13px 14px; border-radius: 4px; font-family: 'Share Tech Mono', monospace; font-size: 15px;
         }
-        .stocks-search-row .btn { padding: 10px 16px; font-size: 12px; white-space: nowrap; }
+        .stocks-search-row .btn { padding: 13px 22px; font-size: 12px; white-space: nowrap; }
         .stocks-up { color: var(--green-active); }
         .stocks-down { color: var(--red-alert); }
-        .stocks-card .name { font-size: 17px; color: #fff; font-weight: 600; }
-        .stocks-card .ticker { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
-        .stocks-card .price-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .stocks-card .price { font-family: 'Orbitron', sans-serif; font-size: 26px; color: #fff; }
-        .stocks-card .change { font-size: 13px; }
-        .stocks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
-        .stocks-grid .k { color: var(--text-dim); font-size: 12px; }
-        .stocks-grid .v { font-size: 13px; }
+
+        .stocks-hero {
+            background: rgba(0, 243, 255, 0.05); border: 1px solid var(--border-color);
+            border-radius: 6px; padding: 22px 24px; margin-bottom: 16px;
+        }
+        .stocks-hero .name { font-size: 21px; color: #fff; font-weight: 600; }
+        .stocks-hero .ticker { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 16px; }
+        .stocks-hero .price-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+        .stocks-hero .price { font-family: 'Orbitron', sans-serif; font-size: 40px; color: #fff; text-shadow: 0 0 20px rgba(0, 243, 255, 0.5); }
+        .stocks-badge {
+            display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 20px;
+            font-family: 'Share Tech Mono', monospace; font-size: 14px; font-weight: 600;
+        }
+        .stocks-badge.stocks-up { background: rgba(0, 255, 136, 0.15); border: 1px solid var(--green-active); }
+        .stocks-badge.stocks-down { background: rgba(255, 59, 59, 0.15); border: 1px solid var(--red-alert); }
+        .stocks-chart-label { font-size: 11px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 6px; }
+        .stocks-chart-wrap { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 8px; }
+        .stocks-chart-wrap canvas { width: 100%; height: 90px; display: block; }
+
+        .stocks-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .stocks-stat-card {
+            border: 1px solid var(--border-color); border-radius: 4px; padding: 13px 16px;
+            background: rgba(0, 243, 255, 0.03);
+        }
+        .stocks-stat-card .k { font-size: 11px; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 6px; }
+        .stocks-stat-card .v { font-family: 'Share Tech Mono', monospace; font-size: 15px; }
 
         /* --- First-visit Google connect gate: schedule/email management is
            JARVIS's central use case (see priorities in CLAUDE.md), so the
@@ -709,7 +727,7 @@
     </div>
 
     <div class="inbox-overlay" id="stocks-overlay">
-        <div class="inbox-modal" style="width: 480px;">
+        <div class="inbox-modal" style="width: 600px;">
             <div class="confirm-title">▸ מניות</div>
             <div class="stocks-search-row">
                 <input type="text" id="stocks-query-input" placeholder="לדוגמה: Apple, Tesla, TEVA" dir="auto"
@@ -1846,24 +1864,54 @@
             }
             const upToday = data.change_today >= 0;
             const upWeek = data.change_week >= 0;
-            const card = document.createElement('div');
-            card.className = 'stocks-card';
-            card.innerHTML = `
-                <div class="name" dir="auto">${data.name}</div>
-                <div class="ticker">${data.symbol} · ${data.exchange}</div>
-                <div class="price-row">
-                    <span class="price">${data.price} ${data.currency}</span>
-                    <span class="change ${upToday ? 'stocks-up' : 'stocks-down'}">${upToday ? '▲' : '▼'} ${Math.abs(data.change_today)} (${Math.abs(data.change_today_pct)}%) היום</span>
+            box.innerHTML = `
+                <div class="stocks-hero">
+                    <div class="name" dir="auto">${data.name}</div>
+                    <div class="ticker">${data.symbol} · ${data.exchange}</div>
+                    <div class="price-row">
+                        <span class="price">${data.price} ${data.currency}</span>
+                        <span class="stocks-badge ${upToday ? 'stocks-up' : 'stocks-down'}">${upToday ? '▲' : '▼'} ${Math.abs(data.change_today)} (${Math.abs(data.change_today_pct)}%) היום</span>
+                    </div>
+                    <div class="stocks-chart-label">▸ מגמת 5 ימים</div>
+                    <div class="stocks-chart-wrap"><canvas id="stocks-sparkline" width="520" height="90"></canvas></div>
                 </div>
-                <div class="stocks-grid">
-                    <span class="k">שינוי השבוע</span><span class="v ${upWeek ? 'stocks-up' : 'stocks-down'}">${upWeek ? '▲' : '▼'} ${Math.abs(data.change_week)} (${Math.abs(data.change_week_pct)}%)</span>
-                    <span class="k">גבוה יומי</span><span class="v">${data.day_high}</span>
-                    <span class="k">נמוך יומי</span><span class="v">${data.day_low}</span>
-                    <span class="k">גבוה 52 שבועות</span><span class="v">${data.week_52_high}</span>
-                    <span class="k">נמוך 52 שבועות</span><span class="v">${data.week_52_low}</span>
+                <div class="stocks-stats-grid">
+                    <div class="stocks-stat-card"><div class="k">שינוי השבוע</div><div class="v ${upWeek ? 'stocks-up' : 'stocks-down'}">${upWeek ? '▲' : '▼'} ${Math.abs(data.change_week)} (${Math.abs(data.change_week_pct)}%)</div></div>
+                    <div class="stocks-stat-card"><div class="k">טווח יומי</div><div class="v">${data.day_low} – ${data.day_high}</div></div>
+                    <div class="stocks-stat-card"><div class="k">גבוה 52 שבועות</div><div class="v">${data.week_52_high}</div></div>
+                    <div class="stocks-stat-card"><div class="k">נמוך 52 שבועות</div><div class="v">${data.week_52_low}</div></div>
                 </div>`;
-            box.innerHTML = '';
-            box.appendChild(card);
+            drawStocksSparkline(data.closes, upWeek);
+        }
+
+        function drawStocksSparkline(closes, up) {
+            const canvas = document.getElementById('stocks-sparkline');
+            if (!canvas || !closes || closes.length < 2) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height, pad = 10;
+            const min = Math.min(...closes), max = Math.max(...closes);
+            const range = (max - min) || 1;
+            const color = up ? '0, 255, 136' : '255, 59, 59';
+            const points = closes.map((c, i) => [
+                pad + (i / (closes.length - 1)) * (w - pad * 2),
+                h - pad - ((c - min) / range) * (h - pad * 2),
+            ]);
+            ctx.clearRect(0, 0, w, h);
+            ctx.beginPath();
+            points.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+            ctx.lineTo(points[points.length - 1][0], h - pad);
+            ctx.lineTo(points[0][0], h - pad);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(${color}, 0.08)`;
+            ctx.fill();
+
+            ctx.beginPath();
+            points.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+            ctx.strokeStyle = `rgba(${color}, 0.9)`;
+            ctx.lineWidth = 2;
+            ctx.shadowColor = `rgba(${color}, 0.6)`;
+            ctx.shadowBlur = 6;
+            ctx.stroke();
         }
 
         function renderInboxList(emails) {

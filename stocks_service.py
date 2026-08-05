@@ -92,6 +92,9 @@ def get_quote(query: str) -> dict:
             "day_low": round(meta.get("regularMarketDayLow", price), 2),
             "week_52_high": round(meta.get("fiftyTwoWeekHigh", 0) or 0, 2),
             "week_52_low": round(meta.get("fiftyTwoWeekLow", 0) or 0, 2),
+            # last up-to-5 daily closes, oldest first — lets the HUD draw a
+            # trend sparkline instead of just showing bare numbers.
+            "closes": [round(c, 2) for c in closes],
         }
     except requests.RequestException as e:
         logger.warning(f"Stock quote fetch failed for '{query}': {e}")
