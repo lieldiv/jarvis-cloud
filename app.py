@@ -277,7 +277,10 @@ SYSTEM_PROMPT = (
     "Beyond that, you are a general-purpose agent for whatever the user "
     "needs." + _DESKTOP_CONTROL_GUIDANCE +
     " Also available: get_weather and calculate. Use write_and_test_code "
-    "when asked to write and verify a script. Call the right tool instead of "
+    "when asked to write and verify a script. find_nearby_places is "
+    "narrow and deliberately so — only for an explicit 'find me X near me' "
+    "request, never as a general web-search fallback and never just "
+    "because you're unsure of an answer. Call the right tool instead of "
     "guessing or saying you can't; if a command doesn't match any tool, "
     "just respond conversationally."
 )
@@ -705,6 +708,31 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "find_nearby_places",
+            "description": (
+                "Propose a Google Maps search for nearby places — restaurants, "
+                "pizza, pharmacies, gas stations, and the like. This does NOT "
+                "search immediately — it registers a confirmation the user must "
+                "approve on the HUD before anything opens (a link only opens on "
+                "their own device from a real click, never automatically). ONLY "
+                "use this for an explicit 'find me X near me' / 'where's the "
+                "nearest X' request. Never use it for general knowledge "
+                "questions, and never as a fallback just because you don't know "
+                "an answer — if it's not a genuine nearby-place request, say so "
+                "instead of proposing a search."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to find nearby, e.g. 'pizza' or 'פיצה'."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "computer_use",
             "description": (
                 "General screen control for anything without a dedicated tool: "
@@ -870,6 +898,29 @@ def _set_reminder(user_id, args):
     return result["message"]
 
 
+def _find_nearby_places(user_id, args):
+    query = (args.get("query") or "").strip()
+    if not query:
+        return "What would you like me to find nearby, sir?"
+    # Opening a link server-side (webbrowser.open()) was the exact bug that
+    # got web_search/play_media removed entirely — it opens on the SERVER,
+    # not the user's device. This never touches a browser on the server at
+    # all: it pushes a proposal, and the click on HUD's APPROVE button (a
+    # real, synchronous user gesture) is what calls window.open() — see
+    # resolveConfirmation's 'web_search' branch in index.html. That's also
+    # exactly why this doesn't go through guardrails.request_confirmation:
+    # there's no server-side callback to run on approval, nothing here ever
+    # touches the user's real calendar/mailbox/files, so there's nothing for
+    # the usual confirm-to-act token/ownership machinery to protect.
+    url = f"https://www.google.com/maps/search/{requests.utils.quote(query)}"
+    event_stream.push_event({
+        "type": "confirmation_required", "kind": "web_search",
+        "message": f"Search Google Maps for '{query}' nearby?",
+        "details": {"query": query, "url": url},
+    }, user_id=user_id)
+    return f"I've drawn up a search for '{query}' nearby, sir — check the HUD to approve."
+
+
 # Every tool dispatch entry is now built fresh per request, closing over
 # that request's signed-in user_id — including the ones below that don't
 # touch calendar/mail data. They used to live in a shared, static dict, but
@@ -895,6 +946,7 @@ def _build_tool_impl(user_id: str) -> dict:
         "create_calendar_event": lambda args: _create_calendar_event(user_id, args),
         "send_email": lambda args: _send_email(user_id, args),
         "set_reminder": lambda args: _set_reminder(user_id, args),
+        "find_nearby_places": lambda args: _find_nearby_places(user_id, args),
         "computer_use": lambda args: _computer_use(user_id, args),
         "write_and_test_code": lambda args: _write_and_test_code(user_id, args),
         "list_workspace": lambda args: file_tools.list_dir(args.get("path", "."), user_id=user_id),

@@ -1426,6 +1426,7 @@
         const CONFIRM_TITLES = {
             calendar_event: 'הצעת אירוע ביומן',
             email: 'הצעת אימייל',
+            web_search: 'הצעת חיפוש',
         };
 
         function formatDateTimeRange(startIso, endIso) {
@@ -1498,6 +1499,9 @@
                     fieldRow('קבצים מצורפים', (d.attachments || []).join(', ')),
                     fieldRow('דרך', d.provider),
                 ].forEach(el => { if (el) fieldsBox.appendChild(el); });
+            } else if (evt.kind === 'web_search' && d) {
+                const el = fieldRow('חיפוש', d.query);
+                if (el) fieldsBox.appendChild(el);
             } else {
                 const el = fieldRow('פעולה', evt.message);
                 if (el) fieldsBox.appendChild(el);
@@ -1618,6 +1622,25 @@
         }
 
         async function resolveConfirmation(approve) {
+            // web_search never registers anything server-side (see
+            // _find_nearby_places' comment in app.py) — nothing to POST to,
+            // approving IS just opening the link. window.open() has to run
+            // synchronously, before any await, or the browser stops
+            // treating this as a real click and blocks it as a popup.
+            if (pendingConfirmEvt && pendingConfirmEvt.kind === 'web_search') {
+                const evt = pendingConfirmEvt;
+                pendingConfirmToken = null;
+                hideConfirmModal();
+                if (approve) {
+                    window.open(evt.details.url, '_blank');
+                    addLog(`J.A.R.V.I.S: פתחתי חיפוש עבור '${evt.details.query}', אדוני.`, 'jarvis');
+                } else {
+                    addLog('J.A.R.V.I.S: בסדר, לא חיפשתי, אדוני.', 'jarvis');
+                }
+                setHudState('LISTENING');
+                return;
+            }
+
             const token = pendingConfirmToken;
             pendingConfirmToken = null;
             hideConfirmModal();
