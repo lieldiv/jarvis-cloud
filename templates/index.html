@@ -694,6 +694,16 @@
         </div>
     </div>
 
+    <div class="inbox-overlay" id="all-events-overlay">
+        <div class="inbox-modal">
+            <div class="confirm-title">▸ כל הפגישות הקרובות</div>
+            <div class="events-box" id="all-events-list" style="max-height: 50vh; flex: none;"></div>
+            <div class="confirm-actions">
+                <button class="btn btn-reset" onclick="closeAllEventsModal()">✖ סגור</button>
+            </div>
+        </div>
+    </div>
+
     <div class="confirm-overlay" id="switch-account-overlay">
         <div class="confirm-modal">
             <div class="confirm-title">▸ החלפת חשבון</div>
@@ -2047,46 +2057,92 @@
             }
         }
 
+        // The sidebar widget only ever shows the nearest few (by date/time —
+        // the server already sorts them) rather than trying to make a small
+        // panel scroll internally (that turned out fragile across the
+        // responsive layout's breakpoints — reported still cut off with no
+        // way to reach the rest even after a first attempt at fixing the
+        // flex/overflow chain). "See everything" instead opens a proper
+        // modal with its own robust max-height + overflow-y:auto, which
+        // doesn't depend on any ancestor flex chain at all.
+        const SIDEBAR_EVENTS_LIMIT = 3;
+        let upcomingEventsCache = [];
+
+        function buildEventItemEl(ev) {
+            const item = document.createElement('div');
+            item.className = 'event-item';
+            const top = document.createElement('div');
+            top.className = 'event-item-top';
+            const time = document.createElement('span');
+            time.className = 'event-time';
+            time.textContent = ev.time_label;
+            top.appendChild(time);
+            // Only Google-sourced events carry a real id right now (see
+            // productivity_service.request_delete_calendar_event's
+            // docstring) — no id, no cancel button, rather than wiring a
+            // button that would just fail on click.
+            if (ev.id) {
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'event-cancel-btn';
+                cancelBtn.textContent = '✖ בטל';
+                cancelBtn.onclick = () => cancelEvent(ev.id, ev.summary);
+                top.appendChild(cancelBtn);
+            }
+            const title = document.createElement('span');
+            title.className = 'event-title';
+            title.textContent = ev.summary;
+            item.append(top, title);
+            return item;
+        }
+
         async function pollUpcomingEvents() {
             const box = document.getElementById('events-box');
             try {
                 const res = await fetch('/api/upcoming-events');
                 const data = await res.json();
+                upcomingEventsCache = (data.configured && data.events) ? data.events : [];
                 box.innerHTML = '';
-                if (!data.configured || !data.events || data.events.length === 0) {
+                if (upcomingEventsCache.length === 0) {
                     const empty = document.createElement('div');
                     empty.className = 'events-empty';
                     empty.textContent = 'אין כלום בקרוב';
                     box.appendChild(empty);
-                    return;
-                }
-                data.events.forEach(ev => {
-                    const item = document.createElement('div');
-                    item.className = 'event-item';
-                    const top = document.createElement('div');
-                    top.className = 'event-item-top';
-                    const time = document.createElement('span');
-                    time.className = 'event-time';
-                    time.textContent = ev.time_label;
-                    top.appendChild(time);
-                    // Only Google-sourced events carry a real id right now
-                    // (see productivity_service.request_delete_calendar_event's
-                    // docstring) — no id, no cancel button, rather than
-                    // wiring a button that would just fail on click.
-                    if (ev.id) {
-                        const cancelBtn = document.createElement('button');
-                        cancelBtn.className = 'event-cancel-btn';
-                        cancelBtn.textContent = '✖ בטל';
-                        cancelBtn.onclick = () => cancelEvent(ev.id, ev.summary);
-                        top.appendChild(cancelBtn);
+                } else {
+                    upcomingEventsCache.slice(0, SIDEBAR_EVENTS_LIMIT).forEach(ev => box.appendChild(buildEventItemEl(ev)));
+                    if (upcomingEventsCache.length > SIDEBAR_EVENTS_LIMIT) {
+                        const moreBtn = document.createElement('button');
+                        moreBtn.className = 'qa-btn';
+                        moreBtn.style.marginTop = '2px';
+                        moreBtn.textContent = `📋 כל הפגישות (${upcomingEventsCache.length})`;
+                        moreBtn.onclick = openAllEventsModal;
+                        box.appendChild(moreBtn);
                     }
-                    const title = document.createElement('span');
-                    title.className = 'event-title';
-                    title.textContent = ev.summary;
-                    item.append(top, title);
-                    box.appendChild(item);
-                });
+                }
+                // Keep an already-open "all events" modal in sync too (e.g.
+                // right after cancelling one from inside it).
+                if (document.getElementById('all-events-overlay').classList.contains('show')) {
+                    renderAllEventsList();
+                }
             } catch (e) { /* keep whatever was last shown */ }
+        }
+
+        function openAllEventsModal() {
+            document.getElementById('all-events-overlay').classList.add('show');
+            renderAllEventsList();
+        }
+
+        function closeAllEventsModal() {
+            document.getElementById('all-events-overlay').classList.remove('show');
+        }
+
+        function renderAllEventsList() {
+            const list = document.getElementById('all-events-list');
+            list.innerHTML = '';
+            if (!upcomingEventsCache.length) {
+                list.innerHTML = '<div class="events-empty">אין כלום בקרוב</div>';
+                return;
+            }
+            upcomingEventsCache.forEach(ev => list.appendChild(buildEventItemEl(ev)));
         }
 
         // Direct request/response, not SSE (see /api/calendar/cancel-request's
