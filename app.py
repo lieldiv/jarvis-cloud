@@ -111,6 +111,7 @@ import productivity_service
 import daily_briefing
 import google_service
 import gemini_service
+import stocks_service
 import users
 # -----------------------------------------------------------------------------
 
@@ -1272,6 +1273,17 @@ def edit_confirmation(token):
     else:
         return jsonify({"status": "error", "message": "Unknown confirmation kind."}), 400
     return jsonify(result)
+
+
+@app.route("/api/stocks/quote")
+def stocks_quote():
+    """Backs the HUD's מניות (stocks) modal. Deliberately zero-LLM, same
+    reasoning as /api/agenda/week below — a search box needs a reliable,
+    fast answer, not a tool call the model might phrase or round
+    differently each time."""
+    if not session.get("user_id"):
+        return jsonify({"error": "Please sign in first, sir."})
+    return jsonify(stocks_service.get_quote(request.args.get("q", "")))
 
 
 @app.route("/api/agenda/week")
