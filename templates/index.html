@@ -1604,6 +1604,7 @@
                     body: JSON.stringify({ approve })
                 });
                 const data = await res.json();
+                pollUpcomingEvents(); // an approved calendar event should show up here right away, not on the next 60s poll
                 if (data.audio) {
                     playJarvisAudio(data.audio, () => {
                         addLog(`J.A.R.V.I.S: ${data.response}`, 'jarvis');
