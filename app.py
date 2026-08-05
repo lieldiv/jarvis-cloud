@@ -640,7 +640,18 @@ TOOLS = [
                     "summary": {"type": "string"},
                     "start_iso": {"type": "string"},
                     "end_iso": {"type": "string"},
-                    "description": {"type": "string"},
+                    "description": {
+                        "type": "string",
+                        "description": (
+                            "Any extra context the user gave beyond the bare title/time — what "
+                            "the event is actually about, who/what's involved, plans, etc. This "
+                            "is what they'll see when they click the event later to remind "
+                            "themselves what it was for, so don't leave it out or invent details "
+                            "they didn't mention. If they gave nothing beyond the title, say so "
+                            "plainly (in their language) instead of leaving it blank — e.g. "
+                            "'לא ניתן מידע נוסף.'"
+                        ),
+                    },
                     "location": {"type": "string"},
                     "provider": {"type": "string", "description": "'google', 'microsoft', or 'auto' (default)"},
                 },
