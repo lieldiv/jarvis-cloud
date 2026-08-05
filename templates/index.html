@@ -1306,6 +1306,7 @@
                 const transcript = event.results[0][0].transcript.toLowerCase().trim();
 
                 if (pendingConfirmToken) {
+                    micMuted = true; // one utterance per click — see toggleListening
                     addLog(`YOU: ${transcript}`, 'user');
                     handleConfirmationReply(transcript);
                 } else if (!isAwake) {
@@ -1322,9 +1323,12 @@
                     addLog(`YOU: ${transcript}`, 'user');
                     triggerStop();
                 } else {
-                    // Awake: "jarvis" was already said once to get here — no
-                    // need to repeat it every sentence, converse freely until
-                    // "stop" is heard.
+                    // Press-to-talk: this result is the one utterance the last
+                    // sphere click asked for. Mute again immediately rather
+                    // than staying open for whatever's said next — every
+                    // command needs its own click, so background chatter
+                    // between commands is never picked up at all.
+                    micMuted = true;
                     addLog(`YOU: ${transcript}`, 'user');
                     sendCommand(transcript);
                 }
@@ -1827,12 +1831,19 @@
 
         function wakeJarvis(initialCommand = "Hello Jarvis") {
             isAwake = true;
+            // Press-to-talk: waking up (by voice or by clicking the sphere)
+            // does NOT start continuous listening — it lands idle/muted, and
+            // the user clicks the sphere again before each thing they want
+            // to say. This is the actual fix for the reported problem
+            // (someone else talking mid-session getting misheard as a
+            // command) — nothing is ever heard except right after a
+            // deliberate click.
+            micMuted = true;
             document.getElementById('mic-gate').classList.remove('show');
             sendCommand(initialCommand);
         }
 
         function triggerWake() {
-            micMuted = false;
             if (SPEECH_RECOGNITION_SUPPORTED) {
                 if (!micInitialized) {
                     initSpeechRecognition();
@@ -1905,7 +1916,7 @@
                 statusText.innerText = 'המתנה — אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
             } else if (state === 'MUTED') {
                 core.classList.add('muted');
-                statusText.innerText = 'מושתק — לחץ על הכדור כדי להמשיך להאזין';
+                statusText.innerText = 'לחץ על הכדור כדי לדבר';
             } else if (state === 'SPEAKING') {
                 core.classList.add('speaking');
                 statusText.innerText = 'JARVIS מדבר...';
