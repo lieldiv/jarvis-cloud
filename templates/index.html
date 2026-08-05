@@ -230,10 +230,34 @@
            voice commands use, polled every minute (calendars don't change
            second to second, no need for anything faster). */
         .upcoming-events { margin-top: 22px; }
-        .events-box { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .event-item { display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; border-radius: 3px; border: 1px solid var(--border-color); background: rgba(0, 243, 255, 0.05); animation: fade-in 0.4s ease; }
+        /* flex:1 + min-height:0 is what actually lets this shrink to its
+           allotted space inside the panel's flex column so overflow-y:auto
+           kicks in — without min-height:0 a flex child just grows to fit
+           all its content instead, which is why more than ~2 events used
+           to silently spill past the panel with no way to reach the rest. */
+        .events-box {
+            display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+            flex: 1; min-height: 0; overflow-y: auto;
+        }
+        .events-box::-webkit-scrollbar { width: 6px; }
+        .events-box::-webkit-scrollbar-track { background: transparent; }
+        .events-box::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        .events-box::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+        .events-box { scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
+        .event-item {
+            display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; border-radius: 3px;
+            border: 1px solid var(--border-color); background: rgba(0, 243, 255, 0.05); animation: fade-in 0.4s ease;
+            flex-shrink: 0;
+        }
+        .event-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
         .event-time { font-size: 16px; color: var(--user-gold); letter-spacing: 1px; font-weight: 700; }
         .event-title { font-size: 19px; color: #eefcff; }
+        .event-cancel-btn {
+            flex-shrink: 0; background: transparent; border: 1px solid var(--border-color); color: var(--text-dim);
+            font-size: 11px; padding: 4px 8px; border-radius: 3px; cursor: pointer; transition: all 0.2s;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .event-cancel-btn:hover { border-color: var(--red-alert); color: var(--red-alert); background: rgba(255, 59, 59, 0.1); }
         .events-empty { font-size: 13px; color: var(--text-dim); padding: 6px 0; }
 
         @keyframes fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
@@ -762,7 +786,7 @@
 
             <div class="upcoming-events" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
                 <div class="mini-chart-label">▸ קרוב</div>
-                <div class="events-box" id="events-box" style="overflow-y: auto;">
+                <div class="events-box" id="events-box">
                     <div class="events-empty">—</div>
                 </div>
             </div>
@@ -1485,6 +1509,7 @@
 
         const CONFIRM_TITLES = {
             calendar_event: 'הצעת אירוע ביומן',
+            calendar_event_delete: 'ביטול אירוע ביומן',
             email: 'הצעת אימייל',
             web_search: 'הצעת חיפוש',
         };
@@ -1561,6 +1586,9 @@
                 ].forEach(el => { if (el) fieldsBox.appendChild(el); });
             } else if (evt.kind === 'web_search' && d) {
                 const el = fieldRow('חיפוש', d.query);
+                if (el) fieldsBox.appendChild(el);
+            } else if (evt.kind === 'calendar_event_delete' && d) {
+                const el = fieldRow('אירוע', d.summary);
                 if (el) fieldsBox.appendChild(el);
             } else {
                 const el = fieldRow('פעולה', evt.message);
@@ -2035,16 +2063,55 @@
                 data.events.forEach(ev => {
                     const item = document.createElement('div');
                     item.className = 'event-item';
+                    const top = document.createElement('div');
+                    top.className = 'event-item-top';
                     const time = document.createElement('span');
                     time.className = 'event-time';
                     time.textContent = ev.time_label;
+                    top.appendChild(time);
+                    // Only Google-sourced events carry a real id right now
+                    // (see productivity_service.request_delete_calendar_event's
+                    // docstring) — no id, no cancel button, rather than
+                    // wiring a button that would just fail on click.
+                    if (ev.id) {
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.className = 'event-cancel-btn';
+                        cancelBtn.textContent = '✖ בטל';
+                        cancelBtn.onclick = () => cancelEvent(ev.id, ev.summary);
+                        top.appendChild(cancelBtn);
+                    }
                     const title = document.createElement('span');
                     title.className = 'event-title';
                     title.textContent = ev.summary;
-                    item.append(time, title);
+                    item.append(top, title);
                     box.appendChild(item);
                 });
             } catch (e) { /* keep whatever was last shown */ }
+        }
+
+        // Direct request/response, not SSE (see /api/calendar/cancel-request's
+        // docstring) — the response already IS the confirmation payload, so
+        // it reuses showConfirmModal() the exact same way the SSE-pushed
+        // calendar_event/email/web_search confirmations do.
+        async function cancelEvent(eventId, summary) {
+            let data;
+            try {
+                const res = await fetch('/api/calendar/cancel-request', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event_id: eventId, summary }),
+                });
+                data = await res.json();
+            } catch (e) {
+                addLog('SYS: Could not reach the server to request that cancellation.', 'sys');
+                return;
+            }
+            if (data.status !== 'confirmation_required') {
+                addLog(`J.A.R.V.I.S: ${data.message}`, 'jarvis');
+                return;
+            }
+            showConfirmModal({
+                token: data.token, kind: data.kind, message: data.message, details: data.details,
+            });
         }
         pollUpcomingEvents();
         setInterval(pollUpcomingEvents, 60000);

@@ -1319,6 +1319,26 @@ def upcoming_events():
     return jsonify({"configured": True, "events": events})
 
 
+@app.route("/api/calendar/cancel-request", methods=["POST"])
+def calendar_cancel_request():
+    """Backs the ✖ בטל button on each upcoming-events widget item. Unlike
+    the LLM-tool-triggered calendar_event/email confirmations (pushed over
+    SSE, since that tool call happens off in the background mid-turn), this
+    is a direct button click that already has a synchronous request/
+    response available — so it hands the confirmation straight back here
+    instead of going through event_stream at all, sidestepping the exact
+    mobile SSE-reliability gap find_nearby_places needed a polling fallback
+    for."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"status": "refused", "message": "Please sign in first, sir."}), 401
+    data = request.json or {}
+    result = productivity_service.request_delete_calendar_event(
+        user_id, event_id=data.get("event_id", ""), summary=data.get("summary", ""),
+    )
+    return jsonify(result)
+
+
 @app.route("/api/speak", methods=["POST"])
 def speak():
     """Generic text-to-speech — wraps tts.generate_tts_base64 for callers

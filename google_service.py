@@ -229,6 +229,7 @@ def list_calendar_events(user_id: str, time_min_iso: str, time_max_iso: str, max
         start = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date")
         end = item.get("end", {}).get("dateTime") or item.get("end", {}).get("date")
         events.append({
+            "id": item.get("id", ""),
             "summary": item.get("summary", "(no title)"),
             "start": start,
             "end": end,
@@ -258,6 +259,21 @@ def create_calendar_event(user_id: str, summary: str, start_iso: str, end_iso: s
     except Exception as e:
         logger.error(f"Google Calendar create failed (network/transport error): {e}")
         return "I couldn't reach Google Calendar to create that event, sir — check the internet connection and try again."
+
+
+def delete_calendar_event(user_id: str, event_id: str) -> str:
+    svc = _calendar_service(user_id)
+    if not svc:
+        return "Google Calendar isn't connected, sir — please sign in again."
+    try:
+        svc.events().delete(calendarId="primary", eventId=event_id).execute()
+        return "Cancelled that event on your Google Calendar, sir."
+    except HttpError as e:
+        logger.error(f"Google Calendar delete failed: {e}")
+        return "I couldn't cancel that event, sir — Google Calendar refused the request. Please try again shortly."
+    except Exception as e:
+        logger.error(f"Google Calendar delete failed (network/transport error): {e}")
+        return "I couldn't reach Google Calendar to cancel that event, sir — check the internet connection and try again."
 
 
 def list_recent_emails(user_id: str, max_results: int = 8, query: str = "is:unread"):

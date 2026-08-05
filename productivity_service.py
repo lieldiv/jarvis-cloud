@@ -116,7 +116,10 @@ def get_upcoming_events_structured(user_id: str, max_results: int = 3):
     if events is None:
         return None
     return [
-        {"summary": e.get("summary", "(no title)"), "time_label": _format_time(e.get("start")), "source": e.get("source", "")}
+        {
+            "id": e.get("id", ""), "summary": e.get("summary", "(no title)"),
+            "time_label": _format_time(e.get("start")), "source": e.get("source", ""),
+        }
         for e in events
     ]
 
@@ -308,6 +311,30 @@ def request_create_calendar_event(user_id: str, summary: str, start_iso: str, en
             "summary": summary, "start_iso": start_iso, "end_iso": end_iso,
             "description": description, "location": location, "provider": target.title(),
         },
+    }
+
+
+def request_delete_calendar_event(user_id: str, event_id: str, summary: str = "") -> dict:
+    """Cancel-gated the same way create is — nothing is ever removed from
+    the user's real calendar without an explicit approval on the HUD.
+    Google-only: microsoft_service.list_calendar_events doesn't return
+    event ids at all (and isn't configured in this build anyway — see this
+    module's docstring), so there's nothing to target for a Microsoft
+    event yet."""
+    if not event_id:
+        return {"status": "refused", "message": "No event was specified, sir."}
+    if not google_service.CONFIGURED:
+        return {"status": "refused", "message": "No calendar is connected, sir — please sign in first."}
+
+    description_text = f"Cancel calendar event '{summary or event_id}'"
+    token = request_confirmation(
+        description_text, google_service.delete_calendar_event, user_id, event_id,
+        meta={"kind": "calendar_event_delete", "user_id": user_id},
+    )
+    return {
+        "status": "confirmation_required", "token": token, "message": description_text,
+        "kind": "calendar_event_delete",
+        "details": {"summary": summary or event_id},
     }
 
 
