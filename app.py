@@ -110,6 +110,7 @@ ensure_workspace()
 import productivity_service
 import daily_briefing
 import google_service
+import users
 # -----------------------------------------------------------------------------
 
 app = Flask(__name__)
@@ -1333,6 +1334,26 @@ def compose_send():
     # Same confirm-gated path every other write in this app uses.
     result = productivity_service.request_send_email(user_id, to, subject, body, attachments=attachments or None)
     return jsonify(result)
+
+
+@app.route("/api/weekly-summary/send-now", methods=["POST"])
+def send_weekly_summary_now():
+    """Manually fires the same weekly-summary email daily_briefing.py's
+    scheduler sends every Sunday morning, right now, to the signed-in user's
+    own address — lets them see what it looks like without waiting for
+    Sunday. Skips the confirm-to-act modal on purpose: it only ever emails
+    the requester their own already-visible calendar data, at their own
+    explicit request — there's nothing here for them to approve."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Please sign in first, sir."}), 401
+    if not google_service.is_connected(user_id):
+        return jsonify({"error": "Google Calendar isn't connected, sir."}), 400
+
+    user = users.get_user(user_id)
+    text = productivity_service.get_weekly_summary_text(user_id)
+    result = google_service.send_email(user_id, user["email"], "Your week ahead — J.A.R.V.I.S.", text)
+    return jsonify({"message": result})
 
 
 @app.route("/api/stream")

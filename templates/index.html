@@ -697,6 +697,7 @@
                 <button class="qa-btn" onclick="openInboxModal()">✉️ בדוק דואר</button>
                 <button class="qa-btn" onclick="sendCommand(&quot;What's on my calendar this week?&quot;)">📆 השבוע</button>
                 <button class="qa-btn" onclick="openComposeModal()">📝 נסח אימייל</button>
+                <button class="qa-btn" onclick="sendWeeklySummaryNow()">📧 שלח סיכום שבועי עכשיו</button>
                 <button class="qa-btn" onclick="resetMemory()">🧹 נקה זיכרון</button>
             </div>
 
@@ -1936,6 +1937,20 @@
                 showHologram('Memory cleared, sir.');
             } catch (err) {
                 addLog('SYS: Failed to clear memory.', 'sys');
+            }
+        }
+
+        // Manually fires the same email daily_briefing.py's scheduler sends
+        // every Sunday morning — a preview button, not a real feature the
+        // user needs day to day.
+        async function sendWeeklySummaryNow() {
+            addLog('SYS: שולח סיכום שבועי…', 'sys');
+            try {
+                const res = await fetch('/api/weekly-summary/send-now', { method: 'POST' });
+                const data = await res.json();
+                addLog(`SYS: ${data.message || data.error || 'משהו השתבש.'}`, 'sys');
+            } catch (err) {
+                addLog('SYS: לא הצלחתי להתחבר לשרת כדי לשלוח את הסיכום.', 'sys');
             }
         }
 
