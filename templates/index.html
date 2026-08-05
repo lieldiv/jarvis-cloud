@@ -294,6 +294,14 @@
         .center-hud.sleeping .core-sphere { background: radial-gradient(circle, #0c1922 0%, #050b12 70%, transparent 100%); box-shadow: 0 0 20px rgba(0, 243, 255, 0.08); animation: none; filter: brightness(0.35); }
         .center-hud.sleeping .ring-outer { animation-play-state: paused; opacity: 0.18; filter: grayscale(0.7) brightness(0.55); }
 
+        /* Muted (manually paused via clicking the sphere, see toggleListening) —
+           deliberately a red family, not the same dim gray as SLEEPING: this
+           is "conversation still active, mic intentionally off for a
+           moment", not "session ended", and the color should say so at a
+           glance. */
+        .center-hud.muted .core-sphere { background: radial-gradient(circle, #2a0a0a 0%, #150505 70%, transparent 100%); box-shadow: 0 0 30px rgba(255, 59, 59, 0.2); animation: none; filter: brightness(0.55); }
+        .muted .status-dot { background: var(--red-alert); box-shadow: 0 0 8px var(--red-alert); }
+
         .center-hud.processing .core-sphere { background: radial-gradient(circle, var(--user-gold) 0%, #6b4f00 65%, transparent 100%); box-shadow: 0 0 55px rgba(255, 200, 0, 0.45), inset 0 0 20px #fff8e0; animation: pulse-fast 1s infinite ease-in-out; }
         .processing .status-dot { background: var(--user-gold); box-shadow: 0 0 8px var(--user-gold); }
 
@@ -705,7 +713,7 @@
                 <div class="holo-title">J.A.R.V.I.S // העברת נתונים</div>
                 <div class="holo-data" id="holo-data" dir="auto"></div>
             </div>
-            <div class="arc-wrapper" id="arc-wrapper" onclick="triggerWake()">
+            <div class="arc-wrapper" id="arc-wrapper" onclick="toggleListening()">
                 <div class="ring-outer"></div>
                 <div class="ring-accent"></div>
                 <div class="ring-inner"></div>
@@ -753,6 +761,14 @@
         let micInitialized = false;
         let holoTimeout;
         let recognitionActive = false; // tracks whether the browser's recognizer is currently running
+        // Manually toggled by clicking the core sphere while awake — mutes
+        // the mic without ending the conversation (isAwake stays true, no
+        // re-greeting, no extra Groq call on resume). Added so background
+        // noise/someone else talking can't get misheard as commands: one
+        // tap silences JARVIS instantly, a second tap resumes exactly where
+        // it left off. Distinct from isAwake=false (STOP), which really
+        // ends the session.
+        let micMuted = false;
         let pendingConfirmToken = null; // set when the backend is waiting on a yes/no for a proposed action
         let pendingConfirmEvt = null; // the full { kind, token, details } behind the modal, so EDIT can rebuild it
 
@@ -1252,8 +1268,8 @@
             };
             currentAudio.onended = () => {
                 URL.revokeObjectURL(blobUrl);
-                setHudState('LISTENING');
-                if (isAwake && recognition && !recognitionActive) {
+                setHudState(micMuted ? 'MUTED' : 'LISTENING');
+                if (isAwake && !micMuted && recognition && !recognitionActive) {
                     try { recognition.start(); } catch(e){}
                 }
             };
@@ -1286,6 +1302,7 @@
             };
 
             recognition.onresult = (event) => {
+                if (micMuted) return; // manually paused — ignore anything picked up right at the mute moment
                 const transcript = event.results[0][0].transcript.toLowerCase().trim();
 
                 if (pendingConfirmToken) {
@@ -1323,9 +1340,9 @@
 
             recognition.onend = () => {
                 recognitionActive = false;
-                if (!currentAudio || currentAudio.paused) {
+                if (!micMuted && (!currentAudio || currentAudio.paused)) {
                     setTimeout(() => {
-                        if (!recognitionActive) { try { recognition.start(); } catch(e){} }
+                        if (!recognitionActive && !micMuted) { try { recognition.start(); } catch(e){} }
                     }, 400);
                 }
             };
@@ -1815,6 +1832,7 @@
         }
 
         function triggerWake() {
+            micMuted = false;
             if (SPEECH_RECOGNITION_SUPPORTED) {
                 if (!micInitialized) {
                     initSpeechRecognition();
@@ -1827,20 +1845,45 @@
 
         function triggerStop() {
             isAwake = false;
+            micMuted = false;
             if (currentAudio) currentAudio.pause();
             setHudState('SLEEPING');
             addLog('SYS: JARVIS במצב המתנה. אמור "WAKE UP" או "בוקר טוב" כדי להתחיל.', 'sys');
             document.getElementById('holo-screen').style.display = 'none';
         }
 
+        // The core sphere's click target: wakes JARVIS from cold (same as
+        // the WAKE UP button) if it isn't listening yet, otherwise mutes/
+        // resumes the mic without ending the conversation — see micMuted's
+        // declaration for why that's a different thing from STOP.
+        function toggleListening() {
+            if (!isAwake) {
+                triggerWake();
+                return;
+            }
+            micMuted = !micMuted;
+            if (micMuted) {
+                if (recognition && recognitionActive) { try { recognition.stop(); } catch(e) {} }
+                setHudState('MUTED');
+            } else {
+                if (SPEECH_RECOGNITION_SUPPORTED && !recognitionActive) {
+                    try { recognition.start(); } catch(e) {}
+                }
+                setHudState('LISTENING');
+            }
+        }
+
         function setHudState(state) {
             const core = document.getElementById('hud-core');
             const statusText = document.getElementById('status-text');
-            core.classList.remove('sleeping', 'speaking', 'processing');
+            core.classList.remove('sleeping', 'speaking', 'processing', 'muted');
 
             if (state === 'SLEEPING') {
                 core.classList.add('sleeping');
                 statusText.innerText = 'המתנה — אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
+            } else if (state === 'MUTED') {
+                core.classList.add('muted');
+                statusText.innerText = 'מושתק — לחץ על הכדור כדי להמשיך להאזין';
             } else if (state === 'SPEAKING') {
                 core.classList.add('speaking');
                 statusText.innerText = 'JARVIS מדבר...';
@@ -1848,7 +1891,7 @@
                 core.classList.add('processing');
                 statusText.innerText = 'מעבד...';
             } else {
-                statusText.innerText = 'מאזין — אמור "STOP" כדי לסיים';
+                statusText.innerText = 'מאזין — אמור "STOP" כדי לסיים, או לחץ על הכדור כדי להשתיק';
             }
         }
 
