@@ -21,7 +21,6 @@ action in the codebase, not a special case just for this feature.
 
 import logging
 import os
-import re
 import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
@@ -453,21 +452,25 @@ def _pick_mail_provider(provider: str) -> str:
     return "none"
 
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
 def _looks_like_email(addr: str) -> bool:
     """Confirmed real bug: asked to 'email Omri Div', the model put the
     NAME 'עומרי דיב' straight into the to-field and never asked for an
     actual address — the confirm card showed a recipient no mailbox
-    provider could ever deliver to. Email addresses are ASCII by
-    construction (no real Gmail/Outlook address is Hebrew text), so this
-    check alone reliably distinguishes "an address" from "a name" without
-    needing a contacts lookup. Server-side on purpose, not just a
-    SYSTEM_PROMPT instruction — this must hold regardless of what the
-    model does on any given turn."""
+    provider could ever deliver to. The fix only needs to catch THAT case
+    (nothing that even looks like an attempt at an address — no '@' at
+    all); it's deliberately not stricter than that. A spoken address
+    ('omri dot levi at gmail dot com') can transcribe messily, and a
+    second voice round-trip to re-ask for it usually doesn't go better
+    than the first — so anything with an '@' reaches the confirm card,
+    where the user can fix formatting directly by typing (the EDIT
+    button), a far more reliable correction path than re-speaking it.
+    Email addresses are ASCII by construction, so ascii-only is still a
+    free, safe filter against a bare Hebrew name slipping through."""
     addr = (addr or "").strip()
-    return addr.isascii() and bool(_EMAIL_RE.match(addr))
+    if "@" not in addr or not addr.isascii():
+        return False
+    local, _, domain = addr.partition("@")
+    return bool(local) and bool(domain)
 
 
 def request_send_email(user_id: str, to: str, subject: str, body: str, provider: str = "auto",

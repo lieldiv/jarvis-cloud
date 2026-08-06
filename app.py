@@ -708,9 +708,15 @@ TOOLS = [
                 "Propose sending an email. This does NOT send it immediately — "
                 "it registers a confirmation request the user must approve. "
                 "'to' MUST be an actual email address (name@domain), not a "
-                "person's name — if the user only gives a name ('email Omri'), "
-                "ask for the address before calling this; don't put the name "
-                "itself into 'to', no mailbox provider can deliver to that."
+                "person's name — if the user only gives a bare name with no "
+                "address at all ('email Omri'), ask for the address before "
+                "calling this; don't put the name itself into 'to', no mailbox "
+                "provider can deliver to that. But if they DID attempt to say "
+                "an address out loud (e.g. 'omri dot levi at gmail dot com'), "
+                "normalize it into proper email format yourself ('omri.levi@"
+                "gmail.com') and go ahead — don't make them repeat it by voice "
+                "a second time on the chance you misheard; the confirmation "
+                "card lets them fix the address by typing if you got it wrong."
             ),
             "parameters": {
                 "type": "object",
