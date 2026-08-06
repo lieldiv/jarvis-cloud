@@ -1531,6 +1531,7 @@
 
         const CONFIRM_TITLES = {
             calendar_event: 'הצעת אירוע ביומן',
+            calendar_event_update: 'שינוי זמן אירוע',
             calendar_event_delete: 'ביטול אירוע ביומן',
             email: 'הצעת אימייל',
             web_search: 'הצעת חיפוש',
@@ -1612,6 +1613,12 @@
             } else if (evt.kind === 'calendar_event_delete' && d) {
                 const el = fieldRow('אירוע', d.summary);
                 if (el) fieldsBox.appendChild(el);
+            } else if (evt.kind === 'calendar_event_update' && d) {
+                [
+                    fieldRow('אירוע', d.summary),
+                    fieldRow('היה', formatDateTimeRange(d.old_start, d.old_end)),
+                    fieldRow('יהיה', formatDateTimeRange(d.new_start, d.new_end)),
+                ].forEach(el => { if (el) fieldsBox.appendChild(el); });
             } else {
                 const el = fieldRow('פעולה', evt.message);
                 if (el) fieldsBox.appendChild(el);

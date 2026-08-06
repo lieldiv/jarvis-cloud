@@ -270,7 +270,12 @@ SYSTEM_PROMPT = (
     "ever register a confirmation request — you cannot act on the user's "
     "calendar or mailbox without them explicitly approving it afterward. "
     "Always phrase these as offers ('Shall I add that, sir?'), never as "
-    "already-done. set_reminder is different — it executes immediately, no "
+    "already-done. If the user wants to change the time of a meeting that "
+    "already exists — rescheduling it, or extending/shortening it ('that "
+    "meeting's running long, push it to 10:50') — use update_calendar_event, "
+    "not create_calendar_event; creating a duplicate event instead of "
+    "updating the real one is a real mistake, not a harmless alternative. "
+    "set_reminder is different — it executes immediately, no "
     "approval needed, since it's a private note-to-self rather than an "
     "action on the user's real calendar/mailbox; use it whenever they ask "
     "to be reminded of something later. Its text follows the same rule as "
@@ -671,6 +676,33 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "update_calendar_event",
+            "description": (
+                "Change the time of a meeting that ALREADY EXISTS on the calendar — "
+                "rescheduling it, or extending/shortening it (e.g. 'that meeting is "
+                "running long, push the end to 10:50', 'move my 3pm to 4pm'). Do NOT "
+                "use this to create a new event — that's create_calendar_event. This "
+                "finds the matching real event and, like every other calendar write, "
+                "only registers a confirmation the user must approve — nothing changes "
+                "until then. Give summary_hint from how the user referred to it (leave "
+                "it empty if they just said 'the meeting' and one is clearly in "
+                "progress right now); give only the time field(s) that actually change "
+                "— leave the other blank to keep it as-is."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary_hint": {"type": "string", "description": "How the user referred to the meeting, e.g. 'the meeting with Nimrod' or 'my 3pm'. Leave blank if unspecified."},
+                    "new_start_iso": {"type": "string", "description": "New start time, ISO 8601 with local offset. Leave blank to keep the current start."},
+                    "new_end_iso": {"type": "string", "description": "New end time, ISO 8601 with local offset. Leave blank to keep the current end."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "send_email",
             "description": (
                 "Propose sending an email. This does NOT send it immediately — "
@@ -904,6 +936,22 @@ def _create_calendar_event(user_id, args):
     return result["message"]
 
 
+def _update_calendar_event(user_id, args):
+    result = productivity_service.request_update_calendar_event(
+        user_id,
+        summary_hint=args.get("summary_hint", ""),
+        new_start_iso=args.get("new_start_iso", ""),
+        new_end_iso=args.get("new_end_iso", ""),
+    )
+    if result["status"] == "confirmation_required":
+        event_stream.push_event({
+            "type": "confirmation_required", "token": result["token"], "message": result["message"],
+            "kind": result.get("kind", "generic"), "details": result.get("details"),
+        }, user_id=user_id)
+        return "I've drawn up that time change for your approval, sir — check the HUD."
+    return result["message"]
+
+
 def _send_email(user_id, args):
     result = productivity_service.request_send_email(
         user_id,
@@ -988,6 +1036,7 @@ def _build_tool_impl(user_id: str) -> dict:
             user_id, args.get("unread_only", True), args.get("max_results", 8)
         ),
         "create_calendar_event": lambda args: _create_calendar_event(user_id, args),
+        "update_calendar_event": lambda args: _update_calendar_event(user_id, args),
         "send_email": lambda args: _send_email(user_id, args),
         "set_reminder": lambda args: _set_reminder(user_id, args),
         "find_nearby_places": lambda args: _find_nearby_places(user_id, args),

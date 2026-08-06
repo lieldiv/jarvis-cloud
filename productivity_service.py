@@ -215,18 +215,24 @@ def get_daily_agenda_text(user_id: str) -> str:
             "No calendar or mailbox is connected yet — see the README to set one up."
         )
 
-    events = _collect_events(user_id, days_ahead=1, max_results=15) or []
+    # days_ahead=2 (not 1) so this covers today AND tomorrow — requested
+    # after a 1-day window meant "what's my day look like" never surfaced
+    # tomorrow's first meeting even late in the evening. _format_time already
+    # prefixes each line with its weekday, so today/tomorrow read clearly
+    # without needing a separate date-boundary split (which would need its
+    # own timezone-edge-case handling for no real benefit here).
+    events = _collect_events(user_id, days_ahead=2, max_results=15) or []
     emails = _collect_emails(user_id, unread_only=True, max_results=10) or []
 
     parts = [f"Good morning, sir. Today is {today_label}."]
 
     if events:
-        parts.append(f"You have {len(events)} item(s) on the calendar:")
+        parts.append(f"Here's today and tomorrow — {len(events)} item(s):")
         for e in events:
             where = f" at {e['location']}" if e.get("location") else ""
             parts.append(f"  {_format_time(e['start'])} — {e['summary']}{where}")
     elif any_calendar_configured():
-        parts.append("Nothing on the calendar today.")
+        parts.append("Nothing on the calendar for today or tomorrow.")
 
     if emails:
         # Names only (grouped/counted), not every subject line — see
@@ -335,6 +341,73 @@ def request_delete_calendar_event(user_id: str, event_id: str, summary: str = ""
         "status": "confirmation_required", "token": token, "message": description_text,
         "kind": "calendar_event_delete",
         "details": {"summary": summary or event_id},
+    }
+
+
+def _event_in_progress(event: dict, now) -> bool:
+    """True if `now` falls within a timed (not all-day) event's start/end.
+    All-day events use bare date strings with no tzinfo once parsed — those
+    can't be compared against an aware `now`, so they're never treated as
+    'in progress' here (there's no wall-clock moment for them to match)."""
+    try:
+        start = datetime.fromisoformat(event["start"].replace("Z", "+00:00"))
+        end = datetime.fromisoformat(event["end"].replace("Z", "+00:00"))
+        return start.tzinfo is not None and end.tzinfo is not None and start <= now <= end
+    except (ValueError, TypeError, KeyError):
+        return False
+
+
+def request_update_calendar_event(user_id: str, summary_hint: str = "",
+                                    new_start_iso: str = "", new_end_iso: str = "") -> dict:
+    """Resolves a spoken reference ('the meeting', 'my Nimrod call') to a
+    real, already-created event and proposes a time change — confirm-gated
+    the same way create/delete are. Looks at a window from 2h ago to 36h
+    ahead so both 'extend the meeting that's running now' and 'push
+    tomorrow's standup back' can find their target. Google-only, same
+    reasoning as request_delete_calendar_event (no ids from Microsoft)."""
+    if not new_start_iso and not new_end_iso:
+        return {"status": "refused", "message": "What should the new time be, sir?"}
+    if not google_service.CONFIGURED:
+        return {"status": "refused", "message": "No calendar is connected, sir — please sign in first."}
+
+    now = datetime.now(timezone.utc)
+    time_min = (now - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    time_max = (now + timedelta(hours=36)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    candidates = google_service.list_calendar_events(user_id, time_min, time_max, max_results=20) or []
+
+    hint = (summary_hint or "").strip().lower()
+    if hint:
+        matches = [e for e in candidates if hint in e.get("summary", "").lower()]
+    else:
+        # No hint given — assume "the meeting" means whatever's happening
+        # right now; if nothing's in progress, only guess when there's
+        # exactly one candidate in the window at all.
+        matches = [e for e in candidates if _event_in_progress(e, now)]
+        if not matches and len(candidates) == 1:
+            matches = candidates
+
+    if not matches:
+        return {"status": "refused", "message": "I couldn't find a matching meeting, sir — could you say which one?"}
+    if len(matches) > 1:
+        names = ", ".join(f"'{e['summary']}'" for e in matches[:4])
+        return {"status": "refused", "message": f"I found more than one match, sir: {names}. Which one did you mean?"}
+
+    event = matches[0]
+    resolved_start = new_start_iso or event["start"]
+    resolved_end = new_end_iso or event["end"]
+    description_text = f"Update '{event['summary']}' to {resolved_start} - {resolved_end}"
+    token = request_confirmation(
+        description_text, google_service.update_calendar_event,
+        user_id, event["id"], new_start_iso, new_end_iso,
+        meta={"kind": "calendar_event_update", "user_id": user_id},
+    )
+    return {
+        "status": "confirmation_required", "token": token, "message": description_text,
+        "kind": "calendar_event_update",
+        "details": {
+            "summary": event["summary"], "old_start": event["start"], "old_end": event["end"],
+            "new_start": resolved_start, "new_end": resolved_end,
+        },
     }
 
 

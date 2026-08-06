@@ -261,6 +261,33 @@ def create_calendar_event(user_id: str, summary: str, start_iso: str, end_iso: s
         return "I couldn't reach Google Calendar to create that event, sir — check the internet connection and try again."
 
 
+def update_calendar_event(user_id: str, event_id: str, start_iso: str = "", end_iso: str = "") -> str:
+    """Patches (not replaces) an existing event — only start/end are ever
+    sent, so summary/location/description already on the real event are
+    left untouched. Used for 'push my 10am back to 10:30' / 'that meeting
+    is running long, extend it to 10:50' style requests, which create_
+    calendar_event can't handle since the event already exists."""
+    svc = _calendar_service(user_id)
+    if not svc:
+        return "Google Calendar isn't connected, sir — please sign in again."
+    body = {}
+    if start_iso:
+        body["start"] = {"dateTime": start_iso}
+    if end_iso:
+        body["end"] = {"dateTime": end_iso}
+    if not body:
+        return "Nothing to update, sir — no new time was given."
+    try:
+        svc.events().patch(calendarId="primary", eventId=event_id, body=body).execute()
+        return "Updated that event on your Google Calendar, sir."
+    except HttpError as e:
+        logger.error(f"Google Calendar update failed: {e}")
+        return "I couldn't update that event, sir — Google Calendar refused the request. Please try again shortly."
+    except Exception as e:
+        logger.error(f"Google Calendar update failed (network/transport error): {e}")
+        return "I couldn't reach Google Calendar to update that event, sir — check the internet connection and try again."
+
+
 def delete_calendar_event(user_id: str, event_id: str) -> str:
     svc = _calendar_service(user_id)
     if not svc:
