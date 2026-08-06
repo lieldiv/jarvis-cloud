@@ -706,12 +706,16 @@ TOOLS = [
             "name": "send_email",
             "description": (
                 "Propose sending an email. This does NOT send it immediately — "
-                "it registers a confirmation request the user must approve."
+                "it registers a confirmation request the user must approve. "
+                "'to' MUST be an actual email address (name@domain), not a "
+                "person's name — if the user only gives a name ('email Omri'), "
+                "ask for the address before calling this; don't put the name "
+                "itself into 'to', no mailbox provider can deliver to that."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "to": {"type": "string"},
+                    "to": {"type": "string", "description": "The recipient's actual email address, e.g. 'name@example.com'."},
                     "subject": {"type": "string"},
                     "body": {"type": "string"},
                     "provider": {"type": "string", "description": "'google', 'microsoft', or 'auto' (default)"},

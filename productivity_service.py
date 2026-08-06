@@ -21,6 +21,7 @@ action in the codebase, not a special case just for this feature.
 
 import logging
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
@@ -452,8 +453,30 @@ def _pick_mail_provider(provider: str) -> str:
     return "none"
 
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _looks_like_email(addr: str) -> bool:
+    """Confirmed real bug: asked to 'email Omri Div', the model put the
+    NAME 'עומרי דיב' straight into the to-field and never asked for an
+    actual address — the confirm card showed a recipient no mailbox
+    provider could ever deliver to. Email addresses are ASCII by
+    construction (no real Gmail/Outlook address is Hebrew text), so this
+    check alone reliably distinguishes "an address" from "a name" without
+    needing a contacts lookup. Server-side on purpose, not just a
+    SYSTEM_PROMPT instruction — this must hold regardless of what the
+    model does on any given turn."""
+    addr = (addr or "").strip()
+    return addr.isascii() and bool(_EMAIL_RE.match(addr))
+
+
 def request_send_email(user_id: str, to: str, subject: str, body: str, provider: str = "auto",
                         attachments: list = None) -> dict:
+    if not _looks_like_email(to):
+        return {
+            "status": "refused",
+            "message": f"'{to}' doesn't look like a real email address, sir — what's the address to send to?",
+        }
     target = _pick_mail_provider(provider)
     if target == "none":
         return {"status": "refused", "message": "No mailbox is connected, sir — please sign in first."}
@@ -488,6 +511,11 @@ def edit_pending_email(token: str, to: str, subject: str, body: str, attachments
     attachments, when omitted, keeps whatever was already attached (read
     back from meta) — the HUD's edit form doesn't re-render a file picker,
     so a typo fix to the subject shouldn't silently drop the attachment."""
+    if not _looks_like_email(to):
+        return {
+            "status": "error",
+            "message": f"'{to}' doesn't look like a real email address, sir — what's the address to send to?",
+        }
     meta = get_pending_meta(token)
     if not meta or meta.get("kind") != "email":
         return {"status": "error", "message": "That confirmation has expired or doesn't exist, sir."}
