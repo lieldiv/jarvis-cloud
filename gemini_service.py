@@ -35,7 +35,13 @@ except Exception:
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 CONFIGURED = bool(GEMINI_LIBS_AVAILABLE and GEMINI_API_KEY)
 
-_MODEL = "gemini-2.5-flash"
+# Confirmed live against the real key: "gemini-2.5-flash" now 404s —
+# "This model ... is no longer available to new users" — Google retired it
+# for newly-created API keys/projects even though it still shows up in
+# models.list(). "-latest" is a Google-provided alias to whatever current
+# model that tier actually points to, specifically so this doesn't happen
+# again the next time Google reshuffles the lineup.
+_MODEL = "gemini-flash-latest"
 
 _client = None
 if CONFIGURED:
