@@ -781,17 +781,32 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_market_summary",
+            "description": (
+                "How the major US stock indices (S&P 500, Dow, Nasdaq) are "
+                "doing today and this week — use this for general 'how's the "
+                "market' / 'did stocks drop this week' questions instead of "
+                "get_current_info. No parameters."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_current_info",
             "description": (
                 "Look up real-time or current-events information via a live "
-                "Google Search — news, stock/market moves, sports scores, "
-                "or anything else that could have happened after your own "
-                "training cutoff. ONLY use this when the question genuinely "
-                "needs up-to-date information you cannot already know. "
-                "Never use it for general knowledge you already know, and "
-                "never reach for it just because you're unsure — think "
-                "first, and only call this when the answer could plausibly "
-                "have changed since you were trained."
+                "Google Search — news, sports scores, or anything else that "
+                "could have happened after your own training cutoff. For "
+                "general market/stock-index questions use get_market_summary "
+                "instead — it's free and always available, this tool needs "
+                "Gemini configured and may not be. ONLY use this when the "
+                "question genuinely needs up-to-date information you cannot "
+                "already know. Never use it for general knowledge you "
+                "already know, and never reach for it just because you're "
+                "unsure — think first, and only call this when the answer "
+                "could plausibly have changed since you were trained."
             ),
             "parameters": {
                 "type": "object",
@@ -1033,6 +1048,7 @@ _STATIC_TOOL_IMPL = {
     "open_application": lambda args: open_application(args.get("app_name", "")),
     "close_application": lambda args: close_application(args.get("app_name", "")),
     "calculate": lambda args: calculate(args.get("expression", "")),
+    "get_market_summary": lambda args: stocks_service.get_market_summary(),
     "get_current_info": lambda args: gemini_service.search_current_info(args.get("query", "")),
 }
 

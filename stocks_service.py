@@ -102,3 +102,42 @@ def get_quote(query: str) -> dict:
     except Exception as e:
         logger.error(f"Stock quote parsing failed for '{query}': {e}")
         return {"error": "Something went wrong reading that stock's data, sir."}
+
+
+# Major US indices — enough to answer "how's the market doing" / "did
+# stocks drop this week" without any AI search at all. This exists because
+# get_current_info (Gemini) turned out to need Google Cloud billing set up
+# even for its free tier, which the user didn't want to do — this answers
+# the one question that actually motivated adding Gemini in the first
+# place, with a service that's been zero-key and zero-cost the whole time.
+_MARKET_INDICES = [("^GSPC", "S&P 500"), ("^DJI", "Dow Jones"), ("^IXIC", "Nasdaq")]
+
+
+def get_market_summary() -> str:
+    lines = []
+    for symbol, label in _MARKET_INDICES:
+        try:
+            res = requests.get(
+                _CHART_URL.format(symbol=requests.utils.quote(symbol, safe="")),
+                params={"range": "5d", "interval": "1d"},
+                headers=_HEADERS, timeout=6,
+            )
+            res.raise_for_status()
+            result = res.json()["chart"]["result"][0]
+            meta = result["meta"]
+            closes = [c for c in result["indicators"]["quote"][0]["close"] if c is not None]
+            if not closes:
+                continue
+            price = meta.get("regularMarketPrice", closes[-1])
+            prev_close = meta.get("previousClose") or meta.get("chartPreviousClose") or closes[-1]
+            week_open = closes[0]
+            today_pct = (price - prev_close) / prev_close * 100 if prev_close else 0
+            week_pct = (price - week_open) / week_open * 100 if week_open else 0
+            today_dir = "up" if today_pct >= 0 else "down"
+            week_dir = "up" if week_pct >= 0 else "down"
+            lines.append(f"{label} is {today_dir} {abs(today_pct):.1f}% today and {week_dir} {abs(week_pct):.1f}% this week")
+        except Exception as e:
+            logger.warning(f"Market summary fetch failed for {symbol}: {e}")
+    if not lines:
+        return "I couldn't reach the market data service right now, sir."
+    return "Here's the market, sir: " + "; ".join(lines) + "."
