@@ -45,5 +45,5 @@ services:
         sync: false
       - key: FLASK_SECRET_KEY
         sync: false            # generate once (e.g. `python -c "import secrets; print(secrets.token_hex(32))"`) and keep it stable across deploys
-      - key: GEMINI_API_KEY
-        sync: false            # free, no card — https://aistudio.google.com/apikey — powers get_current_info
+      - key: TAVILY_API_KEY
+        sync: false            # free, no card — https://tavily.com — powers get_current_info

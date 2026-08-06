@@ -110,7 +110,7 @@ ensure_workspace()
 import productivity_service
 import daily_briefing
 import google_service
-import gemini_service
+import tavily_service
 import stocks_service
 import users
 # -----------------------------------------------------------------------------
@@ -797,11 +797,11 @@ TOOLS = [
             "name": "get_current_info",
             "description": (
                 "Look up real-time or current-events information via a live "
-                "Google Search — news, sports scores, or anything else that "
+                "web search — news, sports scores, or anything else that "
                 "could have happened after your own training cutoff. For "
                 "general market/stock-index questions use get_market_summary "
                 "instead — it's free and always available, this tool needs "
-                "Gemini configured and may not be. ONLY use this when the "
+                "Tavily configured and may not be. ONLY use this when the "
                 "question genuinely needs up-to-date information you cannot "
                 "already know. Never use it for general knowledge you "
                 "already know, and never reach for it just because you're "
@@ -1049,7 +1049,7 @@ _STATIC_TOOL_IMPL = {
     "close_application": lambda args: close_application(args.get("app_name", "")),
     "calculate": lambda args: calculate(args.get("expression", "")),
     "get_market_summary": lambda args: stocks_service.get_market_summary(),
-    "get_current_info": lambda args: gemini_service.search_current_info(args.get("query", "")),
+    "get_current_info": lambda args: tavily_service.search_current_info(args.get("query", "")),
 }
 
 

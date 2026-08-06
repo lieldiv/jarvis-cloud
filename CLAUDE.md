@@ -28,10 +28,12 @@ device for a cloud server to control:
    tokens against the free-tier rate limit too). What's left: calculate,
    get_weather, write_and_test_code + file tools (now per-user sandboxed,
    see below), the schedule/email/reminder tools, `find_nearby_places`
-   (confirm-to-open Google Maps search, see below), and `get_current_info`
-   (live news/stocks/current-events lookup via [gemini_service.py](gemini_service.py),
-   see below) — the last two are the only tools that touch anything outside
-   the app's own data, and both are deliberately scoped narrow.
+   (confirm-to-open Google Maps search, see below), `get_market_summary`
+   (free market-index lookup, no AI involved, see below), and
+   `get_current_info` (general news/current-events lookup via
+   [tavily_service.py](tavily_service.py), see below) — the last three are
+   the only tools that touch anything outside the app's own data, and all
+   are deliberately scoped narrow.
 
 ## ⚠️ Do not confuse this with the other two JARVIS folders
 
@@ -125,18 +127,35 @@ access — asked "did the stock market drop this week", they can only guess
 or admit they don't know. Unlike ChatGPT's web app, JARVIS never had a real
 web-browsing tool wired in — the old `web_search` tool (removed earlier)
 only ever called `webbrowser.open()`, it never fed search results back to
-the model either.
+the model either. General market-mood questions specifically are answered
+for free with zero search at all — see `get_market_summary` below.
 
-[gemini_service.py](gemini_service.py) fixes this narrowly: Google AI
-Studio's Gemini API has a genuinely free tier (no credit card) **and** a
-real Google Search grounding tool — the model actually searches and reads
-results before answering. Wired to exactly one tool, `get_current_info`,
-used only when the question needs current information the frozen Groq
-model can't know — SYSTEM_PROMPT is explicit that this isn't a general
-second LLM backend or an excuse to search reflexively (same "narrow and
+[tavily_service.py](tavily_service.py) fixes the general case: Tavily's
+free tier (no credit card, 1,000 requests/month) is purpose-built for
+LLM search — feed it a question, get back a synthesized answer plus the
+sources it drew from. Wired to exactly one tool, `get_current_info`, used
+only when the question needs current information the frozen Groq model
+can't know — SYSTEM_PROMPT is explicit that this isn't a general second
+LLM backend or an excuse to search reflexively (same "narrow and
 deliberately so" philosophy as `find_nearby_places`). Needs its own
-`GEMINI_API_KEY` env var (get one at https://aistudio.google.com/apikey);
-degrades to a spoken "not set up" message rather than failing if unset.
+`TAVILY_API_KEY` env var (get one at https://tavily.com — sign up, key is
+generated automatically); degrades to a spoken "not set up" message
+rather than failing if unset. (An earlier version of this used Gemini
+instead — its free tier turned out to require Google Cloud billing setup
+even to use, which defeated the point; replaced outright rather than kept
+as a fallback.)
+
+## Why get_market_summary exists (free, zero AI, for market questions)
+
+[stocks_service.py](stocks_service.py)'s `get_market_summary()` answers
+"how's the market doing" / "did stocks drop this week" by fetching the
+major US indices (S&P 500, Dow, Nasdaq) from the same zero-key Yahoo
+Finance endpoint the `📈 מניות` HUD button uses — no LLM call, no API key,
+can't be blocked by any billing gate. Listed ahead of `get_current_info`
+in both the TOOLS schema and each tool's own description, so the model
+reaches for the free one first for general market-mood questions;
+`get_current_info` stays for genuinely non-market current-events
+questions.
 
 ## Known gotchas
 

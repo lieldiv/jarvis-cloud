@@ -40,11 +40,9 @@ google-api-python-client==2.169.0
 # --- Microsoft Outlook/365 (Graph API) ------------------------------------
 msal==1.37.0
 
-# --- Live search grounding (get_current_info tool) ------------------------
-# Groq's models have no internet access at all; this is the one call that
-# actually reads live Google Search results before answering. Free tier,
-# no card — see gemini_service.py's docstring for the API key setup.
-google-genai==1.47.0
+# Note: get_current_info (tavily_service.py) needs no new dependency here —
+# Tavily's API is plain REST, called via the `requests` package already
+# pinned above.
 
 # --- Timezone-aware "current time" for the LLM (app.py's LOCAL_TZ) --------
 # stdlib zoneinfo needs an IANA tz database; not every base Linux image
