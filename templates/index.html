@@ -1161,11 +1161,28 @@ function initSpeechRecognition(){
     recognition.onerror = (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             showToast('הגישה למיקרופון נחסמה — אפשר אותה בהגדרות הדפדפן, או השתמש בקלט הטקסט.', true);
+        } else if (event.error === 'no-speech' && isAwake && !micMuted) {
+            // Only surfaced while genuinely mid-utterance (post-tap, not
+            // muted) — mobile mics/networks miss this far more than desktop,
+            // and silently failing here (pre-fix) is what looked like
+            // "sometimes it just doesn't work". Now it says so — tap again.
+            showToast('לא שמעתי כלום, אדוני — הקש שוב ונסה לדבר מיד.');
+        } else if (event.error === 'network' && isAwake && !micMuted) {
+            showToast('בעיית רשת בזיהוי הדיבור — הקש שוב.', true);
         }
     };
 
     recognition.onend = () => {
         recognitionActive = false;
+        // No result came in this round (no speech heard, network hiccup, the
+        // mobile recognizer just timing out early — all common on phones) —
+        // onresult never got a chance to advance voiceState past 'listening',
+        // so without this the orb gets stuck showing "מקשיב…" forever and
+        // orbTap()'s `voiceState !== 'idle'` guard silently ignores every
+        // further tap. Re-arm it. (If a result DID come in, sendCommand()
+        // already moved voiceState to 'processing' before onend fires here,
+        // so this is a no-op in that case.)
+        if (voiceState === 'listening') voiceState = 'idle';
         if (!micMuted && (!currentAudio || currentAudio.paused)) {
             setTimeout(() => { if (!recognitionActive && !micMuted) { try { recognition.start(); } catch(e){} } }, 400);
         }
