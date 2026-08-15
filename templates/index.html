@@ -47,7 +47,7 @@
    its own touch-action:none for the drag-to-rotate gesture; this covers
    everywhere else, which had nothing. */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-html,body{ margin:0; padding:0; background:#000; }
+html,body{ margin:0; padding:0; background:#000; width:100%; overflow-x:hidden; }
 body{ font-family:var(--font-mono); color:var(--color-white); }
 input,textarea,button{ font-family:var(--font-mono); }
 input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
@@ -1231,7 +1231,21 @@ function playJarvisAudio(b64Audio, onStart){
         if (isAwake && !micMuted && recognition && !recognitionActive) { try { recognition.start(); } catch(e){} }
         setTimeout(() => { if (voiceState === 'idle') clearOrbBubbles(); }, 2600);
     };
-    currentAudio.onerror = () => { voiceState = 'idle'; renderOrb(); };
+    currentAudio.onerror = () => {
+        // A silent hole this whole time: unlike the play()-rejection path
+        // below (mobile autoplay block), a decode/network failure on the
+        // blob itself landed here and told the user nothing — the reply
+        // text still appeared (already rendered before playJarvisAudio was
+        // called), the orb just quietly went back to idle with no sound
+        // and no explanation, indistinguishable from "JARVIS chose not to
+        // speak". Flaky mobile connections truncating the TTS response
+        // before playJarvisAudio ever got called would land elsewhere, but
+        // a bad/unsupported blob (e.g. an empty or corrupt audio payload)
+        // ends up here specifically. Surface it like every other playback
+        // failure in this function does.
+        voiceState = 'idle'; renderOrb();
+        showToast('🔇 השמע לא עלה — נסה שוב.', true);
+    };
     currentAudio.play().catch(() => {
         // Blocked (mobile autoplay policy) — was previously a silent
         // failure: text still showed via onStart(), audio just never
@@ -1297,6 +1311,15 @@ function initSpeechRecognition(){
             showToast('לא שמעתי כלום, אדוני — הקש שוב ונסה לדבר מיד.');
         } else if (event.error === 'network' && isAwake && !micMuted) {
             showToast('בעיית רשת בזיהוי הדיבור — הקש שוב.', true);
+        } else if ((event.error === 'aborted' || event.error === 'audio-capture') && isAwake && !micMuted) {
+            // Previously unhandled — silent on mobile specifically, where the
+            // recognizer session gets interrupted (another app grabbing the
+            // mic, the OS briefly suspending the tab, etc.) far more than on
+            // desktop. onend still fires and re-arms voiceState/the
+            // auto-restart below, but with nothing said the user just sees
+            // the orb quietly go idle and has no idea it needs a fresh tap
+            // — indistinguishable from "stopped listening for no reason".
+            showToast('ההאזנה נעצרה — הקש שוב כדי להמשיך.', true);
         }
     };
 
@@ -1312,7 +1335,25 @@ function initSpeechRecognition(){
         // so this is a no-op in that case.)
         if (voiceState === 'listening') voiceState = 'idle';
         if (!micMuted && (!currentAudio || currentAudio.paused)) {
-            setTimeout(() => { if (!recognitionActive && !micMuted) { try { recognition.start(); } catch(e){} } }, 400);
+            setTimeout(() => {
+                if (!recognitionActive && !micMuted) {
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        // This restart isn't tied to a fresh user tap — it's
+                        // fired from a plain JS timer. Some Android Chrome
+                        // versions reject start() calls too far removed from
+                        // a real gesture, and unlike every other failure
+                        // path here that was completely silent: no error
+                        // event fires (the session never began), so onerror
+                        // above never sees it either. The orb just sits idle
+                        // forever looking normal while actually listening to
+                        // nothing, which is exactly the "hears again only
+                        // after a long wait" symptom. Say so.
+                        showToast('ההאזנה לא התחדשה — הקש על העיגול כדי להמשיך.', true);
+                    }
+                }
+            }, 400);
         }
         renderOrb();
     };
