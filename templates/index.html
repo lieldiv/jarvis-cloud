@@ -877,6 +877,19 @@ let activityLog = [];
 const STATUS_LABELS = { executed: 'בוצע', confirmed: 'אושר ובוצע', pending: 'ממתין לאישור', cancelled: 'נדחה' };
 const STATUS_COLORS = { executed: '#00ff88', confirmed: '#00ff88', pending: '#ffc800', cancelled: '#ff3b3b' };
 
+// Shared "one command in flight" log slot — every path that sends a
+// command (the orb/text box, quick actions, reminders, places, weekly
+// summary) starts one of these, and whichever confirmation sheet (if any)
+// shows up next claims it instead of creating a second, disconnected entry
+// for the same action. See logCommandStart/logCommandSettle and
+// showConfirmModal's claim of it below.
+let inFlightLogId = null;
+function logCommandStart(text, tool){ return (inFlightLogId = addActivity(text, tool, 'pending')); }
+function logCommandSettle(status){
+    if (inFlightLogId == null) return;
+    updateActivityStatus(inFlightLogId, status);
+    inFlightLogId = null;
+}
 function addActivity(text, tool, status){
     const entry = { id: Date.now() + Math.random(), time: new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }), text, tool, status };
     activityLog.unshift(entry);
@@ -1228,6 +1241,7 @@ async function sendCommand(commandText){
     setOrbTool(''); setOrbResponse('');
     renderOrb();
 
+    logCommandStart(commandText, 'שיחה');
     try {
         const res = await fetch('/api/command', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1235,9 +1249,15 @@ async function sendCommand(commandText){
         });
         const data = await res.json();
         finishCommand(data.response, data.audio);
+        // If this command needed approval, a confirmation sheet is already
+        // showing by now (its SSE push lands before this response usually
+        // does) and has already claimed inFlightLogId itself — only settle
+        // it here for the plain-answer case, where nothing else will.
+        if (!pendingConfirmEvt) logCommandSettle('executed');
     } catch (err) {
         voiceState = 'idle'; renderOrb();
         showToast('לא הצלחתי להתחבר לשרת.', true);
+        logCommandSettle('cancelled');
     }
 }
 function finishCommand(responseText, audio){
@@ -1263,7 +1283,10 @@ function runVoiceCommand(text){
    trustworthy enough for a one-click "show me the week" per the old file).
    ================================================================================ */
 async function loadWeekAgenda(fromQuickAction){
-    if (fromQuickAction) { voiceState = 'processing'; renderOrb(); }
+    // Only the deliberate Home quick-action tap counts as an "activity" for
+    // History — just viewing the Agenda tab's own week toggle is page
+    // navigation, not a command, same reasoning as tab switches not logging.
+    if (fromQuickAction) { voiceState = 'processing'; renderOrb(); logCommandStart('מה יש לי השבוע?', 'get_calendar_events'); }
     else { $('agenda-week-text').innerText = 'טוען…'; }
     try {
         const res = await fetch('/api/agenda/week');
@@ -1274,12 +1297,13 @@ async function loadWeekAgenda(fromQuickAction){
         const speakData = await speakRes.json();
         if (fromQuickAction) {
             finishCommand(data.text, speakData.audio);
+            logCommandSettle('executed');
         } else {
             $('agenda-week-text').innerText = data.text;
             if (speakData.audio) playJarvisAudio(speakData.audio);
         }
     } catch (err) {
-        if (fromQuickAction) { voiceState = 'idle'; renderOrb(); }
+        if (fromQuickAction) { voiceState = 'idle'; renderOrb(); logCommandSettle('cancelled'); }
         else { $('agenda-week-text').innerText = 'לא הצלחתי להתחבר לשרת.'; }
         showToast('לא הצלחתי לטעון את סדר השבוע.', true);
     }
@@ -1411,15 +1435,17 @@ function submitEventForm(){
    confirmation_required event (or a plain response), same as any other
    write. Doesn't touch the orb's own idle voice state. */
 async function submitBackgroundCommand(text, toolLabel){
-    const logId = addActivity(text, toolLabel, 'pending');
+    logCommandStart(text, toolLabel);
     try {
         const res = await fetch('/api/command', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: text }),
         });
         const data = await res.json();
-        if (!pendingConfirmEvt) { updateActivityStatus(logId, 'executed'); showToast(data.response || '', false); }
+        // A confirmation sheet, if one was needed, has already claimed
+        // inFlightLogId by now — this only settles the plain-answer case.
+        if (!pendingConfirmEvt) { logCommandSettle('executed'); showToast(data.response || '', false); }
     } catch (err) {
-        updateActivityStatus(logId, 'cancelled');
+        logCommandSettle('cancelled');
         showToast('לא הצלחתי להתחבר לשרת.', true);
     }
 }
@@ -1432,30 +1458,30 @@ async function submitReminder(){
     const time = $('reminder-time-input').value.trim() || '09:00';
     if (!text) return;
     $('reminder-text-input').value = '';
-    const logId = addActivity(`תזכורת: ${text} בשעה ${time}`, 'set_reminder', 'pending');
+    logCommandStart(`תזכורת: ${text} בשעה ${time}`, 'set_reminder');
     try {
         const res = await fetch('/api/command', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: `תזכיר לי "${text}" בשעה ${time}` }),
         });
         const data = await res.json();
-        updateActivityStatus(logId, 'executed');
+        logCommandSettle('executed');
         showToast(data.response || 'התזכורת נקבעה.');
     } catch (err) {
-        updateActivityStatus(logId, 'cancelled');
+        logCommandSettle('cancelled');
         showToast('לא הצלחתי להתחבר לשרת.', true);
     }
 }
 async function sendWeeklySummaryNow(){
     showToast('שולח סיכום שבועי…');
-    const logId = addActivity('שלח אימייל סיכום שבועי עכשיו', 'send_email', 'pending');
+    logCommandStart('שלח אימייל סיכום שבועי עכשיו', 'send_email');
     try {
         const res = await fetch('/api/weekly-summary/send-now', { method: 'POST' });
         const data = await res.json();
-        updateActivityStatus(logId, data.error ? 'cancelled' : 'executed');
+        logCommandSettle(data.error ? 'cancelled' : 'executed');
         showToast(data.message || data.error || 'משהו השתבש.', !!data.error);
     } catch (err) {
-        updateActivityStatus(logId, 'cancelled');
+        logCommandSettle('cancelled');
         showToast('לא הצלחתי להתחבר לשרת כדי לשלוח את הסיכום.', true);
     }
 }
@@ -1735,11 +1761,13 @@ async function submitQa(){
     if (!q) return;
     qaBusy = true;
     const box = $('qa-answer'); box.classList.add('show'); box.innerText = 'חושב…';
+    logCommandStart(q, 'qa');
     try {
         const res = await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: q }) });
         const data = await res.json();
         box.innerText = data.response || '';
-    } catch (err) { box.innerText = 'לא הצלחתי להתחבר לשרת.'; }
+        if (!pendingConfirmEvt) logCommandSettle('executed');
+    } catch (err) { box.innerText = 'לא הצלחתי להתחבר לשרת.'; logCommandSettle('cancelled'); }
     finally { qaBusy = false; }
 }
 let currentBusy = false;
@@ -1749,11 +1777,13 @@ async function submitCurrent(){
     if (!q) return;
     currentBusy = true;
     const box = $('current-answer'); box.classList.add('show'); box.innerText = 'בודק…';
+    logCommandStart(q, 'get_current_info');
     try {
         const res = await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: q }) });
         const data = await res.json();
         box.innerText = data.response || '';
-    } catch (err) { box.innerText = 'לא הצלחתי להתחבר לשרת.'; }
+        if (!pendingConfirmEvt) logCommandSettle('executed');
+    } catch (err) { box.innerText = 'לא הצלחתי להתחבר לשרת.'; logCommandSettle('cancelled'); }
     finally { currentBusy = false; }
 }
 /* Places: no dedicated endpoint — routed through the normal command flow
@@ -1765,12 +1795,12 @@ async function submitPlaces(){
     placesBusy = true;
     const q = $('places-query').value.trim() || 'בית קפה קרוב אליי';
     closeToolPanel();
-    const logId = addActivity(`חיפוש מקומות: ${q}`, 'find_nearby_places', 'pending');
+    logCommandStart(`חיפוש מקומות: ${q}`, 'find_nearby_places');
     try {
         const res = await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: `${q} קרוב אליי` }) });
         const data = await res.json();
-        if (!pendingConfirmEvt) { updateActivityStatus(logId, 'executed'); showToast(data.response || ''); }
-    } catch (err) { updateActivityStatus(logId, 'cancelled'); showToast('לא הצלחתי להתחבר לשרת.', true); }
+        if (!pendingConfirmEvt) { logCommandSettle('executed'); showToast(data.response || ''); }
+    } catch (err) { logCommandSettle('cancelled'); showToast('לא הצלחתי להתחבר לשרת.', true); }
     finally { placesBusy = false; }
 }
 
@@ -1791,6 +1821,12 @@ const CONFIRM_ACCENTS = {
 const CONFIRMING_LABELS = {
     calendar_event: 'יוצר אירוע ביומן…', calendar_event_update: 'מעדכן שעה…', calendar_event_delete: 'מבטל פגישה…',
     email: 'שולח מייל…', web_search: 'פותח מפות…',
+};
+// Fallback tool label for showConfirmModal's History entry, only used when
+// no in-flight command was tracking one already (see inFlightLogId).
+const CONFIRM_TOOL_NAMES = {
+    calendar_event: 'create_calendar_event', calendar_event_update: 'update_calendar_event',
+    calendar_event_delete: 'delete_calendar_event', email: 'send_email', web_search: 'find_nearby_places',
 };
 
 function formatDateTimeRange(startIso, endIso){
@@ -1860,6 +1896,18 @@ function renderConfirmEditFields(evt){
 function showConfirmModal(evt){
     pendingConfirmToken = evt.token;
     pendingConfirmEvt = evt;
+    // Claim whichever command's in-flight History entry led to this
+    // confirmation (see logCommandStart) so approving/denying updates that
+    // SAME entry instead of leaving it stuck on "ממתין לאישור" forever with
+    // a second, disconnected entry appearing here too. If nothing was
+    // tracking one (e.g. this came from the nearby-search poll with no
+    // in-page trigger), fall back to creating a fresh entry.
+    evt.logId = inFlightLogId;
+    inFlightLogId = null;
+    if (evt.logId == null) {
+        const fallbackText = (evt.details && (evt.details.summary || evt.details.subject || evt.details.query)) || evt.message || '';
+        evt.logId = addActivity(fallbackText, CONFIRM_TOOL_NAMES[evt.kind] || evt.kind || 'confirm', 'pending');
+    }
     editingApproval = false;
     const accent = CONFIRM_ACCENTS[evt.kind] || '#00f3ff';
     $('confirm-accent-dot').style.background = accent; $('confirm-accent-dot').style.boxShadow = `0 0 8px ${accent}`;
@@ -1948,9 +1996,11 @@ async function resolveConfirmation(approve){
         hideConfirmModal();
         if (approve) { window.open(evt.details.url, '_blank'); showToast(`פתחתי חיפוש עבור '${evt.details.query}'.`); }
         else { showToast('בסדר, לא חיפשתי.'); }
+        if (evt.logId != null) updateActivityStatus(evt.logId, approve ? 'confirmed' : 'cancelled');
         return;
     }
     if (!pendingConfirmToken) return;
+    const logId = pendingConfirmEvt ? pendingConfirmEvt.logId : null;
     $('confirming-overlay').classList.add('show');
     const token = pendingConfirmToken;
     try {
@@ -1963,10 +2013,12 @@ async function resolveConfirmation(approve){
         pollUpcomingEvents();
         finishCommand(data.response, data.audio);
         showToast(data.response || '');
+        if (logId != null) updateActivityStatus(logId, approve ? 'confirmed' : 'cancelled');
     } catch (err) {
         pendingConfirmToken = null;
         hideConfirmModal();
         showToast('לא הצלחתי להתחבר לשרת כדי לפתור את האישור.', true);
+        if (logId != null) updateActivityStatus(logId, 'cancelled');
     }
 }
 
