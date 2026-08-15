@@ -490,6 +490,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
           <div id="mic-scan-visual"><div class="mic-level-wrap"><div class="mic-level-bar" id="mic-level-bar"></div></div></div>
           <div id="mic-listen-visual" style="display:none;"><div class="mic-listen-dot"></div></div>
           <div class="mic-error" id="mic-error" dir="auto"></div>
+          <button class="mic-btn" id="mic-tap-start-btn" onclick="triggerWake()">👆 או הקש כאן כדי להתחיל</button>
           <button class="mic-btn" id="mic-retry-btn" onclick="runMicScan()">🔄 נסה שוב</button>
           <button class="mic-btn fallback" id="mic-text-fallback-btn" onclick="continueWithTextOnly()">⌨️ המשך עם קלט טקסט</button>
         </div>
@@ -2280,6 +2281,14 @@ async function runMicScan(){
         errorEl.classList.add('show'); retryBtn.classList.add('show'); $('mic-text-fallback-btn').classList.add('show');
         return;
     }
+    // Granting the mic permission prompt is real user interaction, and
+    // browsers generally still treat the moment right after it resolves as
+    // within that activation window — worth a free unlock attempt here,
+    // since saying the wake word itself (below) never counts as a user
+    // gesture no matter how many times it's repeated, and there is
+    // otherwise nothing tappable on this screen until startWakePhraseStep()
+    // shows the explicit tap-to-start fallback.
+    unlockAudioPlayback();
     subtitle.innerText = 'אמור משהו, אדוני…';
     micTestAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = micTestAudioCtx.createMediaStreamSource(micTestStream);
@@ -2317,6 +2326,13 @@ function startWakePhraseStep(){
     $('mic-listen-visual').style.display = 'block';
     $('mic-title').innerText = 'אמור "WAKE UP" או "בוקר טוב" כדי להתחיל';
     $('mic-subtitle').innerText = 'מאזין…';
+    // A spoken wake word is never a "user gesture" as far as the browser's
+    // autoplay policy is concerned, no matter how many times it's repeated
+    // — if the getUserMedia-grant unlock attempt above didn't stick (Safari
+    // in particular is stricter about this than Chrome), there was nothing
+    // left to tap on this screen at all. This button both starts the
+    // conversation and, being a real tap, reliably unlocks audio.
+    $('mic-tap-start-btn').classList.add('show');
     if (!micInitialized) { initSpeechRecognition(); micInitialized = true; }
     try { recognition.start(); } catch (e) {}
 }
