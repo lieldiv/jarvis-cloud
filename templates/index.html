@@ -434,7 +434,25 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
        which already has its own real status bar and home indicator. Drop
        the chrome and let the app fill the real viewport edge-to-edge. */
     .device-page{ padding:0; }
-    .device-frame{ width:100vw; height:100vh; height:100dvh; max-width:100vw; max-height:100dvh; border-radius:0; padding:0; background:transparent; box-shadow:none; }
+    /* Was 100dvh, which tracks the ACTUAL visible viewport in real time --
+       including shrinking the instant an on-screen keyboard slides up.
+       That's not a bug in isolation (it's what would keep bottom-anchored
+       content above the keyboard instead of hidden behind it), but the
+       resize is instantaneous and un-transitionable (verified: CSS
+       transitions do not animate a value that changes because the
+       viewport itself was resized, only ones that change via normal style
+       recalculation -- a height:.25s transition on this rule measurably
+       did nothing), so every element anchored to this frame's edges
+       (bottom-nav, the command-input row, background decoration) jumped
+       with it in one abrupt, uncontrolled frame the instant the keyboard
+       opened -- almost certainly the "site goes crazy the instant I tap
+       the command box" being reported, and the layout thrashing from it
+       is a plausible cause of the reported sluggishness too. 100svh is
+       the SMALLEST viewport size and does not shrink for the keyboard, so
+       switching to it trades that jarring resize for the keyboard simply
+       overlaying whatever's at the bottom of a now-stable frame while
+       typing -- the far more common, expected mobile pattern. */
+    .device-frame{ width:100vw; height:100vh; height:100svh; max-width:100vw; max-height:100svh; border-radius:0; padding:0; background:transparent; box-shadow:none; }
     .device-screen{ border-radius:0; }
     .dynamic-island, .status-bar-clock, .home-indicator{ display:none; }
     /* That padding was sized to clear the fake island/home-indicator we just
