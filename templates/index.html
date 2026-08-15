@@ -347,7 +347,14 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .file-chip-list{ display:flex; gap:8px; flex-wrap:wrap; }
 .file-chip{ display:flex; align-items:center; gap:6px; padding:7px 11px; border-radius:var(--radius-pill); background:rgba(255,200,0,0.1); border:1px solid rgba(255,200,0,0.4); font-size:12px; color:var(--color-gold); }
 .file-chip button{ background:none; border:none; cursor:pointer; color:var(--color-red); font-size:13px; padding:0; }
-.file-add-chip{ padding:7px 13px; border-radius:var(--radius-pill); border:1px dashed rgba(255,200,0,0.5); font-size:12px; color:var(--color-gold); cursor:pointer; background:none; }
+.file-add-chip{
+    display:inline-flex; align-items:center; gap:6px; padding:8px 15px;
+    border-radius:var(--radius-pill); border:1px dashed rgba(255,200,0,0.55);
+    background:rgba(255,200,0,0.07); font-size:12.5px; font-weight:600; color:var(--color-gold);
+    cursor:pointer; transition:transform .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+}
+.file-add-chip:hover{ background:rgba(255,200,0,0.16); border-color:var(--color-gold); border-style:solid; box-shadow:0 0 16px rgba(255,200,0,0.25); transform:translateY(-1px); }
+.file-add-chip:active{ transform:translateY(0) scale(.96); box-shadow:0 0 8px rgba(255,200,0,0.3); }
 
 .tool-sub{ display:none; }
 .tool-sub.show{ display:block; }
@@ -697,7 +704,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
               <div class="field-label">קבצים מצורפים (עד 3)</div>
               <input type="file" id="compose-file-input" multiple style="display:none;" onchange="handleComposeFilesChosen(this.files)">
               <div class="file-chip-list" id="compose-file-chips"></div>
-              <div class="file-add-chip" id="compose-file-add" onclick="document.getElementById('compose-file-input').click()">+ צרף קובץ</div>
+              <div class="file-add-chip" id="compose-file-add" onclick="document.getElementById('compose-file-input').click()">📎 צרף קובץ</div>
             </div>
           </div>
           <div class="sheet-fields" id="compose-stage-send" style="display:none;">
