@@ -38,7 +38,15 @@
     --font-mono:'Share Tech Mono','Rubik',monospace;
     --tracking-wide:1px; --tracking-wider:2px; --tracking-widest:4px;
 }
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* touch-action:manipulation removes the browser's native double-tap-to-zoom
+   gesture (while still allowing real pinch-zoom and scrolling) — without
+   it, a quick tap on a button/chip can get misread as the first half of a
+   double-tap and the browser zooms the whole page in, which combined with
+   iOS's elastic-bounce overscroll looks exactly like the page "shrinking
+   and spinning" the moment you tap something. .globe-container already had
+   its own touch-action:none for the drag-to-rotate gesture; this covers
+   everywhere else, which had nothing. */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 html,body{ margin:0; padding:0; background:#000; }
 body{ font-family:var(--font-mono); color:var(--color-white); }
 input,textarea,button{ font-family:var(--font-mono); }
@@ -804,6 +812,31 @@ function $(id){ return document.getElementById(id); }
 function el(tag, cls){ const e = document.createElement(tag); if (cls) e.className = cls; return e; }
 
 /* ================================================================================
+   Mobile audio unlock — "JARVIS sometimes just doesn't speak" on phones.
+   Root cause: playJarvisAudio() only ever calls Audio.play() after a fetch()
+   response comes back — i.e. asynchronously, never inside the click/tap
+   handler itself. Mobile Safari and Chrome only allow audio to autoplay
+   when play() runs (or the page has already successfully played audio)
+   inside a direct user gesture; an async continuation after a network
+   round-trip doesn't count, so play() gets silently rejected — sometimes,
+   not always, because some browsers grant a short grace window after the
+   gesture and network latency varies. Playing one silent clip SYNCHRONOUSLY
+   inside the very first real tap/keypress anywhere on the page satisfies
+   that requirement once, which unlocks every later programmatic play() for
+   the rest of the session. */
+let audioUnlocked = false;
+function unlockAudioPlayback(){
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    try {
+        const silence = new Audio('data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA');
+        silence.play().catch(() => {});
+    } catch(e) {}
+}
+document.addEventListener('pointerdown', unlockAudioPlayback, { once: true });
+document.addEventListener('keydown', unlockAudioPlayback, { once: true });
+
+/* ================================================================================
    Ambient background decoration (particles / pings / blobs) — pure flourish,
    ported from the design mock's generative background layers.
    ================================================================================ */
@@ -1145,7 +1178,16 @@ function playJarvisAudio(b64Audio, onStart){
         setTimeout(() => { if (voiceState === 'idle') clearOrbBubbles(); }, 2600);
     };
     currentAudio.onerror = () => { URL.revokeObjectURL(blobUrl); voiceState = 'idle'; renderOrb(); };
-    currentAudio.play().catch(() => { voiceState = 'idle'; renderOrb(); if (onStart) onStart(); });
+    currentAudio.play().catch(() => {
+        // Blocked (mobile autoplay policy) — was previously a silent
+        // failure: text still showed via onStart(), audio just never
+        // played, with nothing telling the user why. Now at least says so;
+        // unlockAudioPlayback() above should make this rare after the
+        // first tap, but a very first command right on page load can still
+        // race it.
+        voiceState = 'idle'; renderOrb(); if (onStart) onStart();
+        showToast('🔇 הדפדפן חסם ניגון קול אוטומטי — גע במסך ונסה שוב.', true);
+    });
 }
 
 /* ================================================================================
