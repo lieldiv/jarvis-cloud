@@ -171,13 +171,22 @@ _PENDING = {}
 _PENDING_TTL_SECONDS = 300
 
 
-def request_confirmation(description: str, callback, *cb_args, meta: dict = None, **cb_kwargs) -> str:
+def request_confirmation(description: str, callback, *cb_args, meta: dict = None,
+                          cancelled_message: str = None, **cb_kwargs) -> str:
     """Register a destructive action. Returns a token to show the user.
     `callback(*cb_args, **cb_kwargs)` runs only on approval.
 
     `meta` is opaque bookkeeping (e.g. which provider/user this proposal is
     for) that the registering module needs later to rebuild `cb_args` if the
     user edits the proposal before approving — see update_pending() below.
+
+    `cancelled_message`, if given, is what resolve_confirmation() returns on
+    a denial instead of the generic "Cancelled: {description}" fallback —
+    `description` is written to read well in a log line ("Create calendar
+    event 'X' (2026-...T...+03:00 - ...) on Google"), not spoken/shown to
+    the user, and for calendar_event_delete specifically the generic
+    fallback reads backwards ("Cancelled: Cancel calendar event 'X'" —
+    denying a delete proposal means the event was kept, not cancelled).
     """
     token = secrets.token_hex(16)  # 128 bits — token_hex(4) (32 bits) was cheaply guessable
     _PENDING[token] = {
@@ -187,6 +196,7 @@ def request_confirmation(description: str, callback, *cb_args, meta: dict = None
         "kwargs": cb_kwargs,
         "created": time.time(),
         "meta": meta or {},
+        "cancelled_message": cancelled_message,
     }
     logger.info(f"Confirmation requested [{token}]: {description}")
     return token
@@ -242,7 +252,7 @@ def resolve_confirmation(token: str, approve: bool) -> str:
     if entry is None:
         return "That confirmation has expired or doesn't exist, sir."
     if not approve:
-        return f"Cancelled: {entry['description']}"
+        return entry.get("cancelled_message") or f"Cancelled: {entry['description']}"
     try:
         result = entry["callback"](*entry["args"], **entry["kwargs"])
         return result if isinstance(result, str) else f"Done: {entry['description']}"

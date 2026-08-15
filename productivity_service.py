@@ -303,6 +303,7 @@ def request_create_calendar_event(user_id: str, summary: str, start_iso: str, en
     token = request_confirmation(
         description_text, impl, *cb_args,
         meta={"kind": "calendar_event", "provider": target, "user_id": user_id},
+        cancelled_message=f"Okay, I didn't create '{summary}', sir.",
     )
     # `kind` + `details` let the HUD render a proper card instead of a text
     # blob — see resolveConfirmation()/renderConfirmationModal() in
@@ -336,6 +337,10 @@ def request_delete_calendar_event(user_id: str, event_id: str, summary: str = ""
     token = request_confirmation(
         description_text, google_service.delete_calendar_event, user_id, event_id,
         meta={"kind": "calendar_event_delete", "user_id": user_id},
+        # Denying a delete PROPOSAL means the event was kept, not cancelled
+        # — the generic "Cancelled: Cancel calendar event 'X'" fallback
+        # reads backwards here.
+        cancelled_message=f"Okay, I left '{summary or event_id}' on your calendar, sir.",
     )
     return {
         "status": "confirmation_required", "token": token, "message": description_text,
@@ -400,6 +405,7 @@ def request_update_calendar_event(user_id: str, summary_hint: str = "",
         description_text, google_service.update_calendar_event,
         user_id, event["id"], new_start_iso, new_end_iso,
         meta={"kind": "calendar_event_update", "user_id": user_id},
+        cancelled_message=f"Okay, I didn't change '{event['summary']}', sir.",
     )
     return {
         "status": "confirmation_required", "token": token, "message": description_text,
@@ -497,6 +503,7 @@ def request_send_email(user_id: str, to: str, subject: str, body: str, provider:
     token = request_confirmation(
         description_text, impl, *cb_args,
         meta={"kind": "email", "provider": target, "user_id": user_id, "attachments": attachments},
+        cancelled_message="Okay, I didn't send that email, sir.",
     )
     return {
         "status": "confirmation_required", "token": token, "message": description_text,

@@ -390,7 +390,6 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .confirm-accent-row{ position:relative; display:flex; align-items:center; gap:8px; margin-bottom:16px; }
 .confirm-accent-dot{ width:7px; height:7px; border-radius:50%; background:#00f3ff; box-shadow:0 0 8px #00f3ff; }
 .confirm-kind-label{ font-family:var(--font-display); font-size:12px; letter-spacing:var(--tracking-wide); color:#00f3ff; }
-.confirm-cmd-text{ font-size:14px; font-weight:500; color:var(--color-cyan); margin-bottom:14px; unicode-bidi:plaintext; }
 .confirm-detail-card{ position:relative; background:rgba(0,243,255,0.07); border:1px solid rgba(0,243,255,0.3); border-radius:4px; padding:14px; margin-bottom:20px; box-shadow:0 0 30px rgba(0,243,255,0.15); }
 .confirm-detail-title{ font-size:16px; font-weight:700; color:var(--color-white); margin-bottom:6px; unicode-bidi:plaintext; }
 .confirm-field-row{ display:flex; gap:10px; font-size:13px; line-height:1.6; margin-bottom:6px; }
@@ -754,7 +753,6 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
               <div class="confirm-accent-dot" id="confirm-accent-dot"></div>
               <span class="confirm-kind-label" id="confirm-kind-label">נדרש אישור</span>
             </div>
-            <div class="confirm-cmd-text" id="confirm-cmd-text"></div>
             <div class="confirm-detail-card" id="confirm-detail-card">
               <div class="confirm-detail-title" id="confirm-detail-title"></div>
               <div id="confirm-read-fields"></div>
@@ -1860,7 +1858,12 @@ function showConfirmModal(evt){
     $('confirm-accent-dot').style.background = accent; $('confirm-accent-dot').style.boxShadow = `0 0 8px ${accent}`;
     $('confirm-kind-label').style.color = accent;
     $('confirm-kind-label').innerText = CONFIRM_TITLES[evt.kind] || 'נדרש אישור';
-    $('confirm-cmd-text').innerText = evt.message || '';
+    // evt.message (the raw backend description, e.g. "Create calendar event
+    // 'X' (2026-08-16T00:00:00+03:00 - ...) on Google") used to render here
+    // verbatim — a redundant, technical-looking dump of exactly what the
+    // detail card below already shows cleanly. Dropped; kept only in
+    // evt.message itself for handleConfirmationReply's voice-approval path,
+    // which never displays it.
     $('confirm-detail-title').innerText = (evt.details && (evt.details.summary || evt.details.subject || evt.details.query)) || '';
     $('confirm-edit-toggle-btn').style.display = (evt.kind === 'calendar_event' || evt.kind === 'email') ? '' : 'none';
     $('confirming-overlay').classList.remove('show');
