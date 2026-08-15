@@ -1,7 +1,12 @@
 # J.A.R.V.I.S — Cloud multi-user fork — Claude Code notes
 
-Multi-user cloud voice assistant, deployed at **https://my-jarvis.onrender.com**
-(Render free tier). Anyone with a Google account added as a Test user can sign
+Multi-user cloud voice assistant, deployed at **https://jarvis-cloud-oifj.onrender.com**
+(Render free tier). The GitHub repo and the Render service's display name were
+both renamed to `my-jarvis`, but Render does not change a service's
+auto-assigned `.onrender.com` subdomain on rename — it's fixed at creation —
+so the actual live URL is still the old one. Confirmed directly from the
+service's own boot log ("Available at your primary URL") and real request
+Referer headers, not assumed. Anyone with a Google account added as a Test user can sign
 in from a phone or computer browser and get their own calendar/inbox/voice
 assistant. Two pillars remain from the original single-user app; the third
 (desktop automation) is intentionally out of scope here — there's no user
