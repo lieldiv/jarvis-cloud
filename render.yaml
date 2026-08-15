@@ -20,7 +20,7 @@
 #      never commit real values into this file or into .env.
 services:
   - type: web
-    name: jarvis-cloud
+    name: my-jarvis
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt

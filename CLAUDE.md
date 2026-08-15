@@ -1,6 +1,6 @@
 # J.A.R.V.I.S — Cloud multi-user fork — Claude Code notes
 
-Multi-user cloud voice assistant, deployed at **https://jarvis-cloud-oifj.onrender.com**
+Multi-user cloud voice assistant, deployed at **https://my-jarvis.onrender.com**
 (Render free tier). Anyone with a Google account added as a Test user can sign
 in from a phone or computer browser and get their own calendar/inbox/voice
 assistant. Two pillars remain from the original single-user app; the third
