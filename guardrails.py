@@ -22,6 +22,7 @@ from __future__ import annotations  # PEP 604 `X | None` hints, running on Pytho
 import logging
 import os
 import secrets
+import threading
 import time
 
 logger = logging.getLogger("jarvis.guardrails")
@@ -167,8 +168,20 @@ def refuse_if_elevated():
 # Anything that lands here does NOT execute yet. It's parked with a token,
 # the Flask layer surfaces it to the HUD/voice ("Sir, confirm: delete X?"),
 # and only /api/confirm/<token> with approve=True actually runs the callback.
+#
+# _LOCK guards every read/write of _PENDING below. Render's gunicorn config
+# (--workers 1 --threads 16) means this dict is shared by up to 16 real
+# concurrent threads — without a lock, _purge_expired()'s delete loop racing
+# another thread's own purge/pop on the same expired token raised a bare
+# KeyError (confirmed: two threads can both snapshot the same stale token
+# before either deletes it), and read-modify-write sequences like
+# update_pending()/update_pending_meta() could interleave. The lock is only
+# ever held around dict bookkeeping, never around a callback's own execution
+# (network I/O to Google/Microsoft) — holding it there would serialize every
+# user's confirmations behind whichever one is slowest.
 _PENDING = {}
 _PENDING_TTL_SECONDS = 300
+_LOCK = threading.Lock()
 
 
 def request_confirmation(description: str, callback, *cb_args, meta: dict = None,
@@ -189,23 +202,25 @@ def request_confirmation(description: str, callback, *cb_args, meta: dict = None
     denying a delete proposal means the event was kept, not cancelled).
     """
     token = secrets.token_hex(16)  # 128 bits — token_hex(4) (32 bits) was cheaply guessable
-    _PENDING[token] = {
-        "description": description,
-        "callback": callback,
-        "args": cb_args,
-        "kwargs": cb_kwargs,
-        "created": time.time(),
-        "meta": meta or {},
-        "cancelled_message": cancelled_message,
-    }
+    with _LOCK:
+        _PENDING[token] = {
+            "description": description,
+            "callback": callback,
+            "args": cb_args,
+            "kwargs": cb_kwargs,
+            "created": time.time(),
+            "meta": meta or {},
+            "cancelled_message": cancelled_message,
+        }
     logger.info(f"Confirmation requested [{token}]: {description}")
     return token
 
 
 def get_pending_meta(token: str) -> dict | None:
-    _purge_expired()
-    entry = _PENDING.get(token)
-    return dict(entry["meta"]) if entry else None
+    with _LOCK:
+        _purge_expired_locked()
+        entry = _PENDING.get(token)
+        return dict(entry["meta"]) if entry else None
 
 
 def update_pending(token: str, args: tuple, description: str) -> bool:
@@ -213,13 +228,14 @@ def update_pending(token: str, args: tuple, description: str) -> bool:
     Approving afterward re-runs the same callback with these new args
     instead of the ones originally proposed — the callback itself never
     changes, only what it's called with."""
-    _purge_expired()
-    entry = _PENDING.get(token)
-    if entry is None:
-        return False
-    entry["args"] = args
-    entry["description"] = description
-    return True
+    with _LOCK:
+        _purge_expired_locked()
+        entry = _PENDING.get(token)
+        if entry is None:
+            return False
+        entry["args"] = args
+        entry["description"] = description
+        return True
 
 
 def update_pending_meta(token: str, **meta_updates) -> bool:
@@ -227,28 +243,53 @@ def update_pending_meta(token: str, **meta_updates) -> bool:
     a field that only meta tracks (e.g. a composed email's attachments,
     which the edit form has no way to re-specify) so it survives an edit
     to unrelated fields instead of silently reverting to "none"."""
-    _purge_expired()
-    entry = _PENDING.get(token)
-    if entry is None:
-        return False
-    entry["meta"].update(meta_updates)
-    return True
+    with _LOCK:
+        _purge_expired_locked()
+        entry = _PENDING.get(token)
+        if entry is None:
+            return False
+        entry["meta"].update(meta_updates)
+        return True
 
 
-def _purge_expired():
+def _purge_expired_locked():
+    """Caller must already hold _LOCK."""
     now = time.time()
     for tok in [t for t, v in _PENDING.items() if now - v["created"] > _PENDING_TTL_SECONDS]:
-        del _PENDING[tok]
+        _PENDING.pop(tok, None)  # pop(default), not del — another racing purge may have already removed it
 
 
 def list_pending():
-    _purge_expired()
-    return {t: v["description"] for t, v in _PENDING.items()}
+    with _LOCK:
+        _purge_expired_locked()
+        return {t: v["description"] for t, v in _PENDING.items()}
+
+
+def list_pending_for_user(user_id: str) -> list[dict]:
+    """What the HUD's recovery poll (see /api/confirm/pending) uses to
+    notice a confirmation whose SSE push never arrived — event_stream.py's
+    push is fire-and-forget with no buffering, so a confirmation raised
+    before the browser's EventSource has finished subscribing (right after
+    page load, or after a Render free-tier cold start) is otherwise gone
+    with no way for the HUD to ever find out about it. Only description/
+    kind, not the full details dict the original request built (that was
+    never persisted here) — the HUD's confirm sheet already falls back to
+    showing the raw message when details is missing, so this is enough to
+    recover a working approve/deny, just without the nicely split fields.
+    """
+    with _LOCK:
+        _purge_expired_locked()
+        return [
+            {"token": t, "kind": v["meta"].get("kind"), "message": v["description"]}
+            for t, v in _PENDING.items()
+            if v["meta"].get("user_id") == user_id
+        ]
 
 
 def resolve_confirmation(token: str, approve: bool) -> str:
-    _purge_expired()
-    entry = _PENDING.pop(token, None)
+    with _LOCK:
+        _purge_expired_locked()
+        entry = _PENDING.pop(token, None)
     if entry is None:
         return "That confirmation has expired or doesn't exist, sir."
     if not approve:

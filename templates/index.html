@@ -1894,20 +1894,30 @@ function renderConfirmEditFields(evt){
     }
 }
 function showConfirmModal(evt){
+    // The recovery poll (/api/confirm/pending, below) and a merely-delayed
+    // SSE push can both end up delivering the exact same token — if we're
+    // already showing/tracking it, keep the same History entry instead of
+    // claiming or creating a second one for what's really one action.
+    const alreadyTrackingThisToken = evt.token && pendingConfirmEvt && evt.token === pendingConfirmToken;
     pendingConfirmToken = evt.token;
-    pendingConfirmEvt = evt;
-    // Claim whichever command's in-flight History entry led to this
-    // confirmation (see logCommandStart) so approving/denying updates that
-    // SAME entry instead of leaving it stuck on "ממתין לאישור" forever with
-    // a second, disconnected entry appearing here too. If nothing was
-    // tracking one (e.g. this came from the nearby-search poll with no
-    // in-page trigger), fall back to creating a fresh entry.
-    evt.logId = inFlightLogId;
-    inFlightLogId = null;
-    if (evt.logId == null) {
-        const fallbackText = (evt.details && (evt.details.summary || evt.details.subject || evt.details.query)) || evt.message || '';
-        evt.logId = addActivity(fallbackText, CONFIRM_TOOL_NAMES[evt.kind] || evt.kind || 'confirm', 'pending');
+    if (alreadyTrackingThisToken) {
+        evt.logId = pendingConfirmEvt.logId;
+    } else {
+        // Claim whichever command's in-flight History entry led to this
+        // confirmation (see logCommandStart) so approving/denying updates
+        // that SAME entry instead of leaving it stuck on "ממתין לאישור"
+        // forever with a second, disconnected entry appearing here too. If
+        // nothing was tracking one (e.g. the SSE push was missed entirely
+        // and this is the recovery poll finding it instead), fall back to
+        // creating a fresh entry.
+        evt.logId = inFlightLogId;
+        inFlightLogId = null;
+        if (evt.logId == null) {
+            const fallbackText = (evt.details && (evt.details.summary || evt.details.subject || evt.details.query)) || evt.message || '';
+            evt.logId = addActivity(fallbackText, CONFIRM_TOOL_NAMES[evt.kind] || evt.kind || 'confirm', 'pending');
+        }
     }
+    pendingConfirmEvt = evt;
     editingApproval = false;
     const accent = CONFIRM_ACCENTS[evt.kind] || '#00f3ff';
     $('confirm-accent-dot').style.background = accent; $('confirm-accent-dot').style.boxShadow = `0 0 8px ${accent}`;
@@ -1919,8 +1929,11 @@ function showConfirmModal(evt){
     // detail card below already shows cleanly. Dropped; kept only in
     // evt.message itself for handleConfirmationReply's voice-approval path,
     // which never displays it.
-    $('confirm-detail-title').innerText = (evt.details && (evt.details.summary || evt.details.subject || evt.details.query)) || '';
-    $('confirm-edit-toggle-btn').style.display = (evt.kind === 'calendar_event' || evt.kind === 'email') ? '' : 'none';
+    $('confirm-detail-title').innerText = (evt.details && (evt.details.summary || evt.details.subject || evt.details.query)) || evt.message || '';
+    // No details means this arrived through the recovery poll (below) with
+    // only a token/kind/message, not the full field set — editing needs
+    // real fields to edit, so hide the button rather than open a blank panel.
+    $('confirm-edit-toggle-btn').style.display = (evt.details && (evt.kind === 'calendar_event' || evt.kind === 'email')) ? '' : 'none';
     $('confirming-overlay').classList.remove('show');
     $('confirming-label').innerText = CONFIRMING_LABELS[evt.kind] || '';
     renderConfirmReadFields(evt);
@@ -2049,8 +2062,18 @@ function initEventStream(){
 }
 initEventStream();
 
-/* Polling backup for find_nearby_places' confirmation — mobile browsers drop
-   long-lived EventSource connections far more aggressively than desktop. */
+/* Polling backup — event_stream.push_event() is fire-and-forget with no
+   buffering, so a confirmation raised before the browser's EventSource has
+   actually finished subscribing (right after page load, a Render free-tier
+   cold start, or just a mobile browser dropping the long-lived connection
+   more aggressively than desktop) is otherwise gone with no way for the
+   HUD to ever learn it exists — it'd sit in guardrails' registry until it
+   silently expires 5 minutes later, while the activity log incorrectly
+   shows the command as "executed" since the LLM's reply text still came
+   back over plain HTTP either way. web_search/places confirmations have
+   their own dedicated recovery check (they're not in guardrails' registry
+   at all — see resolveConfirmation's tokenless handling); every other kind
+   (calendar event, email) shares the general one below. */
 setInterval(async () => {
     if (pendingConfirmToken || pendingConfirmEvt) return;
     try {
@@ -2059,7 +2082,14 @@ setInterval(async () => {
         if (data && data.ts && data.ts > lastNearbySearchTs) {
             lastNearbySearchTs = data.ts;
             showConfirmModal({ type: 'confirmation_required', kind: 'web_search', message: `לחפש ב-Google Maps '${data.query}' בקרבת מקום?`, details: data, token: null });
+            return; // don't also act on the general check below this tick
         }
+    } catch (err) { /* silent — next tick retries */ }
+    try {
+        const res2 = await fetch('/api/confirm/pending');
+        const data2 = await res2.json();
+        const item = (data2.pending || [])[0];
+        if (item) showConfirmModal({ token: item.token, kind: item.kind, message: item.message, details: null });
     } catch (err) { /* silent — next tick retries */ }
 }, 4000);
 

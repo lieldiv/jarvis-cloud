@@ -96,7 +96,7 @@ logging.basicConfig(
 logger = logging.getLogger("jarvis")
 
 # --- Computer-use / self-healing / sandboxing additions ---------------------
-from guardrails import refuse_if_elevated, ensure_workspace, resolve_confirmation, get_pending_meta
+from guardrails import refuse_if_elevated, ensure_workspace, resolve_confirmation, get_pending_meta, list_pending_for_user
 import file_tools
 import vision_action
 import self_healing
@@ -1688,6 +1688,26 @@ def nearby_search_pending():
     if not entry or time.time() - entry["ts"] > 120:
         return jsonify({})
     return jsonify(entry)
+
+
+@app.route("/api/confirm/pending")
+def confirm_pending():
+    """Recovery path for the SAME class of problem nearby_search_pending()
+    above exists for, but general to every confirm-to-act kind (calendar
+    event/email), not just find_nearby_places: event_stream.push_event()
+    is fire-and-forget with no buffering, so a confirmation raised before
+    the browser's EventSource has actually finished subscribing (right
+    after page load, or after a Render free-tier cold start — see
+    render.yaml's own free-tier notes) vanished with no way for the HUD to
+    ever learn it exists. guardrails.list_pending() already tracked
+    everything needed; nothing was exposing it, so a missed SSE push meant
+    the HUD's activity log incorrectly showed the action as "executed"
+    (the LLM's reply text still came back over plain HTTP either way) while
+    guardrails silently expired the untouched confirmation 5 minutes later."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"pending": []})
+    return jsonify({"pending": list_pending_for_user(user_id)})
 
 
 # Started at import time (not inside `if __name__ == "__main__"`) so it
