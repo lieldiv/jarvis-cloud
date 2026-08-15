@@ -434,25 +434,27 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
        which already has its own real status bar and home indicator. Drop
        the chrome and let the app fill the real viewport edge-to-edge. */
     .device-page{ padding:0; }
-    /* Was 100dvh, which tracks the ACTUAL visible viewport in real time --
-       including shrinking the instant an on-screen keyboard slides up.
-       That's not a bug in isolation (it's what would keep bottom-anchored
-       content above the keyboard instead of hidden behind it), but the
-       resize is instantaneous and un-transitionable (verified: CSS
-       transitions do not animate a value that changes because the
-       viewport itself was resized, only ones that change via normal style
-       recalculation -- a height:.25s transition on this rule measurably
-       did nothing), so every element anchored to this frame's edges
-       (bottom-nav, the command-input row, background decoration) jumped
-       with it in one abrupt, uncontrolled frame the instant the keyboard
-       opened -- almost certainly the "site goes crazy the instant I tap
-       the command box" being reported, and the layout thrashing from it
-       is a plausible cause of the reported sluggishness too. 100svh is
-       the SMALLEST viewport size and does not shrink for the keyboard, so
-       switching to it trades that jarring resize for the keyboard simply
-       overlaying whatever's at the bottom of a now-stable frame while
-       typing -- the far more common, expected mobile pattern. */
-    .device-frame{ width:100vw; height:100vh; height:100svh; max-width:100vw; max-height:100svh; border-radius:0; padding:0; background:transparent; box-shadow:none; }
+    /* History here, because the next person to touch this rule should not
+       redo this trial-and-error: tried 100dvh first (tracks the actual
+       visible viewport live, including shrinking for the on-screen
+       keyboard) -- reported as the page "going crazy" the instant the
+       keyboard opened, because the resize is instantaneous and (verified)
+       un-transitionable: CSS transitions do not animate a value that
+       changes because the viewport itself was resized, only ones that
+       change via normal style recalculation. Tried 100svh next (the
+       SMALLEST possible viewport, stable, never shrinks for the keyboard)
+       -- reported as introducing a NEW problem, empty space top/bottom,
+       because svh assumes the browser's own chrome (address bar etc.) is
+       always maximally expanded, and on a real phone where that chrome
+       auto-hides during use, the actual visible area ends up bigger than
+       svh, leaving a gap. Landed on plain 100vh -- the original, boring,
+       pre-dvh unit -- specifically because its defining behavior on
+       mobile is that it does NOT react to either the keyboard or chrome
+       collapsing/expanding, trading both failure modes above for the one
+       well-understood, standard trade-off: the keyboard may overlay
+       whatever's at the bottom of the frame while typing, instead of the
+       frame adapting to stay clear of it. */
+    .device-frame{ width:100vw; height:100vh; max-width:100vw; max-height:100vh; border-radius:0; padding:0; background:transparent; box-shadow:none; }
     .device-screen{ border-radius:0; }
     .dynamic-island, .status-bar-clock, .home-indicator{ display:none; }
     /* That padding was sized to clear the fake island/home-indicator we just
@@ -851,15 +853,27 @@ function el(tag, cls){ const e = document.createElement(tag); if (cls) e.classNa
    not always, because some browsers grant a short grace window after the
    gesture and network latency varies. Playing one silent clip SYNCHRONOUSLY
    inside the very first real tap/keypress anywhere on the page satisfies
-   that requirement once, which unlocks every later programmatic play() for
-   the rest of the session. */
+   that requirement once — BUT (found from "it only speaks the first time,
+   never again" being reported after this shipped) iOS Safari specifically
+   scopes that unlock to the exact <audio> ELEMENT that was played during
+   the gesture, not the page/origin as a whole the way Chrome's Media
+   Engagement Index does. playJarvisAudio() used to call `new Audio(...)`
+   fresh on every single response, so only the unlock clip's own element
+   ever actually benefited — every real TTS response after the first was a
+   brand-new, never-gesture-linked element again. Fixed by creating ONE
+   persistent element here and having playJarvisAudio() reuse that same
+   element (just swapping its .src) for every response instead of
+   constructing a new one each time. */
 let audioUnlocked = false;
+let ttsAudioEl = null; // the one persistent <audio> element every response reuses
 function unlockAudioPlayback(){
     if (audioUnlocked) return;
     audioUnlocked = true;
     try {
-        const silence = new Audio('data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA');
-        silence.play().catch(() => {});
+        ttsAudioEl = new Audio();
+        ttsAudioEl.setAttribute('playsinline', ''); // iOS: avoid a fullscreen native player takeover
+        ttsAudioEl.src = 'data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
+        ttsAudioEl.play().catch(() => {});
     } catch(e) {}
 }
 document.addEventListener('pointerdown', unlockAudioPlayback, { once: true });
@@ -1191,22 +1205,33 @@ function triggerStop(){
    playJarvisAudio — blob-URL playback with onStart/onEnded hooks (verbatim
    logic from the old production file).
    ================================================================================ */
+let ttsBlobUrl = null; // the blob URL currently loaded into ttsAudioEl, so it can be released when replaced
 function playJarvisAudio(b64Audio, onStart){
-    if (currentAudio) currentAudio.pause();
+    // Reuse the SAME <audio> element unlockAudioPlayback() created (falling
+    // back to a fresh one only if a command somehow lands before any tap
+    // ever fired, e.g. straight on page load) instead of constructing a new
+    // Audio() per response — see unlockAudioPlayback's comment for why that
+    // was silently losing the autoplay unlock on every response after the
+    // first on iOS Safari specifically.
+    if (!ttsAudioEl) ttsAudioEl = new Audio();
+    currentAudio = ttsAudioEl;
+    currentAudio.pause();
+    if (ttsBlobUrl) { URL.revokeObjectURL(ttsBlobUrl); ttsBlobUrl = null; }
+
     const binary = atob(b64Audio);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+    ttsBlobUrl = blobUrl;
 
-    currentAudio = new Audio(blobUrl);
+    currentAudio.src = blobUrl;
     currentAudio.onplay = () => { voiceState = 'done'; renderOrb(); if (onStart) onStart(); };
     currentAudio.onended = () => {
-        URL.revokeObjectURL(blobUrl);
         voiceState = 'idle'; renderOrb();
         if (isAwake && !micMuted && recognition && !recognitionActive) { try { recognition.start(); } catch(e){} }
         setTimeout(() => { if (voiceState === 'idle') clearOrbBubbles(); }, 2600);
     };
-    currentAudio.onerror = () => { URL.revokeObjectURL(blobUrl); voiceState = 'idle'; renderOrb(); };
+    currentAudio.onerror = () => { voiceState = 'idle'; renderOrb(); };
     currentAudio.play().catch(() => {
         // Blocked (mobile autoplay policy) — was previously a silent
         // failure: text still showed via onStart(), audio just never
