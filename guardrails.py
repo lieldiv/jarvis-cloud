@@ -179,7 +179,7 @@ def request_confirmation(description: str, callback, *cb_args, meta: dict = None
     for) that the registering module needs later to rebuild `cb_args` if the
     user edits the proposal before approving — see update_pending() below.
     """
-    token = secrets.token_hex(4)
+    token = secrets.token_hex(16)  # 128 bits — token_hex(4) (32 bits) was cheaply guessable
     _PENDING[token] = {
         "description": description,
         "callback": callback,

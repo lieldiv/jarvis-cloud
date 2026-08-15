@@ -31,6 +31,7 @@ productivity_service.py's confirm-before-acting wrapper, matching the
 import logging
 import base64
 import os
+import re
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -352,7 +353,12 @@ def send_email(user_id: str, to: str, subject: str, body: str, attachments: list
                 part = MIMEBase("application", "octet-stream")
                 part.set_payload(base64.b64decode(att["content_b64"]))
                 encoders.encode_base64(part)
-                part.add_header("Content-Disposition", f'attachment; filename="{att["filename"]}"')
+                # Strip CR/LF/quotes before this reaches a raw MIME header —
+                # add_header() doesn't reject embedded newlines itself, so an
+                # unsanitized filename could inject extra header lines/parts
+                # into the outgoing message.
+                safe_filename = re.sub(r'[\r\n"]', "_", att["filename"])[:150] or "attachment"
+                part.add_header("Content-Disposition", f'attachment; filename="{safe_filename}"')
                 message.attach(part)
         else:
             message = MIMEText(body)

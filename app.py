@@ -137,6 +137,27 @@ app.permanent_session_lifetime = timedelta(days=30)
 # it's rendered (outside debug mode) — edits to the HUD's HTML/CSS/JS would
 # silently not show up until the process was restarted.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",
+    # Secure only when actually served over HTTPS (Render sets RENDER=true;
+    # local `python app.py`/gunicorn dev runs are plain http:// and a Secure
+    # cookie there would just never get sent back, breaking login locally).
+    SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
+)
+
+
+@app.after_request
+def _security_headers(response):
+    # X-Frame-Options: the confirm-to-act approve/deny sheet is this app's
+    # entire safety model (see guardrails.py) — without this, a third-party
+    # page could iframe the HUD and attempt a clickjack against that exact
+    # button. Werkzeug's own "Werkzeug/x.y Python/x.y" banner is dropped too
+    # (minor fingerprinting surface, no functional reason to advertise it).
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if "Server" in response.headers:
+        del response.headers["Server"]
+    return response
 
 # ---------------------------------------------------------------------------
 # Groq client setup
@@ -188,6 +209,12 @@ MAX_TOKENS = 1024
 # instance shared across 16 gthread threads, not as multipart/form-data.
 MAX_ATTACHMENTS = 3
 MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024  # 4MB raw per file
+
+# /api/speak (see below) had no auth check and no length cap — an anonymous
+# caller could hand it an arbitrarily long string and tie up one of the
+# gunicorn instance's 16 threads generating TTS for it. Auth now gates it;
+# this caps how much work one call can demand even from a signed-in caller.
+MAX_SPEAK_CHARS = 2000
 
 # The model has no built-in notion of "now" — without this it either guesses
 # a date or, worse, takes the user's spoken clock time (their local time) and
@@ -1303,7 +1330,19 @@ def _confirm_owner_denial(token):
     if not user_id:
         return "Please sign in first, sir."
     meta = get_pending_meta(token)
-    if meta and meta.get("user_id") and meta["user_id"] != user_id:
+    if meta is None:
+        # Unknown/expired token, not a real ownership question — let
+        # resolve_confirmation() give its own accurate "expired or doesn't
+        # exist" message instead of the misleading "isn't yours" below.
+        return None
+    # Fail safe, not permissive: a pending confirmation whose meta doesn't
+    # carry a user_id at all used to be silently treated as "anyone may act
+    # on it" (that gap is how file_tools.kill_process's missing meta went
+    # unnoticed — see its fix). Comparing directly means the ONLY way to
+    # pass this check now is an exact match, so a future request_confirmation()
+    # call site that forgets meta={"user_id": ...} fails loudly (403 for
+    # everyone, including its own creator) instead of silently.
+    if meta.get("user_id") != user_id:
         return "That confirmation isn't yours, sir."
     return None
 
@@ -1423,7 +1462,9 @@ def speak():
     """Generic text-to-speech — wraps tts.generate_tts_base64 for callers
     that already have plain text ready (e.g. the inbox modal's zero-LLM
     spoken summary) and don't need the full run_llm tool-calling pipeline."""
-    text = (request.json or {}).get("text", "").strip()
+    if not session.get("user_id"):
+        return jsonify({"error": "Please sign in first, sir."}), 401
+    text = (request.json or {}).get("text", "").strip()[:MAX_SPEAK_CHARS]
     if not text:
         return jsonify({"audio": None})
     audio_b64 = asyncio.run(generate_tts_base64(text))
@@ -1444,6 +1485,8 @@ def inbox():
 
 @app.route("/api/inbox/draft-reply", methods=["POST"])
 def inbox_draft_reply():
+    if not session.get("user_id"):
+        return jsonify({"error": "Please sign in first, sir."}), 401
     data = request.json or {}
     sender_name = (data.get("sender_name") or "the sender").strip()
     subject = (data.get("subject") or "").strip()
@@ -1508,6 +1551,8 @@ def compose_draft():
     output can break on unescaped quotes/newlines inside a multi-sentence
     body, where a plain delimiter the body text is very unlikely to contain
     literally just needs a regex split."""
+    if not session.get("user_id"):
+        return jsonify({"error": "Please sign in first, sir."}), 401
     data = request.json or {}
     to = (data.get("to") or "").strip()
     instructions = (data.get("instructions") or "").strip()

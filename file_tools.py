@@ -109,7 +109,7 @@ def _do_kill(pid: int) -> str:
         return "I couldn't terminate that process, sir — please try again."
 
 
-def kill_process(pid: int) -> dict:
+def kill_process(pid: int, user_id: str = None) -> dict:
     """Always requires confirmation. Refuses outright — no confirmation
     possible — for anything on the critical-process denylist, since that's
     a system-stability risk rather than a 'did you mean it' question.
@@ -127,5 +127,8 @@ def kill_process(pid: int) -> dict:
         return {"status": "refused", "message": f"Refusing to touch a critical system process ({name}), sir."}
 
     description = f"Terminate process '{name}' (pid {pid})"
-    token = request_confirmation(description, _do_kill, pid)
+    # meta.user_id is what app.py's _confirm_owner_denial() checks before
+    # letting anyone act on this token — every other request_confirmation()
+    # call site in the app passes it; this one didn't, which was the gap.
+    token = request_confirmation(description, _do_kill, pid, meta={"kind": "kill_process", "user_id": user_id})
     return {"status": "confirmation_required", "token": token, "message": description}

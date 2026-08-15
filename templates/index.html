@@ -147,7 +147,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .tab-panel.show{ display:block; animation:jm-fadeup .4s ease both; }
 
 /* Toast */
-.toast{ position:absolute; top:56px; left:50%; transform:translateX(-50%); z-index:400; max-width:80%; background:var(--surface-modal); border:1px solid var(--color-cyan-border); border-radius:var(--radius-pill); padding:9px 16px; font-size:12px; color:var(--color-white); box-shadow:var(--glow-md); display:none; animation:jm-toastin .25s ease both; text-align:center; }
+.toast{ position:absolute; top:56px; left:50%; transform:translateX(-50%); z-index:400; max-width:80%; background:var(--surface-modal); border:1px solid var(--color-cyan-border); border-radius:var(--radius-pill); padding:9px 16px; font-size:12px; color:var(--color-white); box-shadow:var(--glow-md); display:none; animation:jm-toastin .25s ease both; text-align:center; unicode-bidi:plaintext; }
 .toast.show{ display:block; }
 .toast.warn{ border-color:rgba(255,59,59,0.5); color:#ffdede; }
 
@@ -215,8 +215,14 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .event-row:last-child{ border-bottom:none; }
 .event-row .t{ width:70px; flex-shrink:0; font-size:12px; font-weight:600; color:var(--color-gold); }
 .event-row .s{ flex:1; min-width:0; font-size:13.5px; font-weight:500; color:var(--color-white); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.event-row .cancel-x{ flex-shrink:0; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--color-red); border:1px solid rgba(255,59,59,0.4); cursor:pointer; font-size:12px; background:none; }
+/* Was 24px — under the ~44px touch-target guideline. Not going all the way
+   there: two of these now sit side by side in a dense row, and a literal
+   44px circle each would visually overwhelm it. 32px is a real improvement
+   without that tradeoff. */
+.event-row .cancel-x{ flex-shrink:0; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--color-red); border:1px solid rgba(255,59,59,0.4); cursor:pointer; font-size:12px; background:none; }
 .event-row .cancel-x:hover{ background:rgba(255,59,59,0.15); }
+.event-row .cancel-x.resched{ color:var(--color-cyan); border-color:var(--color-cyan-border); }
+.event-row .cancel-x.resched:hover{ background:var(--color-cyan-soft); }
 .events-empty{ font-size:13px; color:var(--color-text-dim); padding:6px 0; }
 
 /* Globe */
@@ -245,12 +251,12 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .activity-section{ margin-top:22px; border-top:var(--border-default); padding-top:16px; }
 .activity-title{ font-family:var(--font-display); font-size:12px; letter-spacing:var(--tracking-wide); color:var(--color-text-dim); margin-bottom:10px; }
 .activity-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 8px; border-radius:var(--radius-sm); border-bottom:1px solid rgba(0,243,255,0.12); }
-.activity-row .txt{ font-size:13.5px; font-weight:500; color:var(--color-white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.activity-row .txt{ font-size:13.5px; font-weight:500; color:var(--color-white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; unicode-bidi:plaintext; }
 .activity-row .meta{ font-size:11.5px; color:var(--color-text-dim); margin-top:2px; }
 .activity-row .status{ font-size:11.5px; font-weight:600; flex-shrink:0; padding-top:2px; }
 .log-row{ padding:11px 8px; border-radius:var(--radius-sm); border-bottom:1px solid rgba(0,243,255,0.12); }
 .log-row .top{ display:flex; justify-content:space-between; gap:10px; }
-.log-row .top span:first-child{ font-size:14px; font-weight:500; color:var(--color-white); }
+.log-row .top span:first-child{ font-size:14px; font-weight:500; color:var(--color-white); unicode-bidi:plaintext; }
 .log-row .meta{ font-size:11.5px; color:var(--color-text-dim); margin-top:4px; }
 
 /* Agenda tab */
@@ -278,8 +284,8 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .mail-card-from{ display:flex; align-items:center; gap:7px; min-width:0; }
 .mail-dot{ width:6px; height:6px; border-radius:50%; background:#00f3ff; box-shadow:0 0 6px #00f3ff; flex-shrink:0; animation:jm-blink 1.8s ease-in-out infinite; }
 .mail-card-from span{ font-size:14.5px; font-weight:700; color:var(--color-white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mail-subject{ font-size:13.5px; font-weight:600; color:var(--color-cyan); margin-top:4px; }
-.mail-preview{ font-size:12.5px; color:var(--color-text-dim); line-height:1.6; margin:2px 0 10px; }
+.mail-subject{ font-size:13.5px; font-weight:600; color:var(--color-cyan); margin-top:4px; unicode-bidi:plaintext; }
+.mail-preview{ font-size:12.5px; color:var(--color-text-dim); line-height:1.6; margin:2px 0 10px; unicode-bidi:plaintext; }
 .mail-reply-btn{ display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:var(--radius-pill); background:rgba(255,200,0,0.12); border:1px solid rgba(255,200,0,0.4); font-size:12px; font-weight:700; color:var(--color-gold); cursor:pointer; }
 .mail-reply-box{ margin-top:12px; display:none; flex-direction:column; gap:8px; }
 .mail-reply-box.show{ display:flex; }
@@ -331,7 +337,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .sheet-overlay.gold{ box-shadow:inset 0 1px 0 rgba(255,200,0,0.4); }
 .sheet-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
 .sheet-header span.title{ font-family:var(--font-display); font-size:15px; letter-spacing:var(--tracking-wide); color:var(--color-white); }
-.sheet-close{ font-size:20px; color:var(--color-text-dim); cursor:pointer; background:none; border:none; line-height:1; }
+.sheet-close{ font-size:20px; color:var(--color-text-dim); cursor:pointer; background:none; border:none; line-height:1; width:36px; height:36px; display:flex; align-items:center; justify-content:center; margin:-6px; flex-shrink:0; }
 .sheet-fields{ display:flex; flex-direction:column; gap:14px; }
 .sheet-row-3{ display:flex; gap:10px; }
 .sheet-row-3 > div{ flex:1; }
@@ -384,12 +390,12 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 .confirm-accent-row{ position:relative; display:flex; align-items:center; gap:8px; margin-bottom:16px; }
 .confirm-accent-dot{ width:7px; height:7px; border-radius:50%; background:#00f3ff; box-shadow:0 0 8px #00f3ff; }
 .confirm-kind-label{ font-family:var(--font-display); font-size:12px; letter-spacing:var(--tracking-wide); color:#00f3ff; }
-.confirm-cmd-text{ font-size:14px; font-weight:500; color:var(--color-cyan); margin-bottom:14px; }
+.confirm-cmd-text{ font-size:14px; font-weight:500; color:var(--color-cyan); margin-bottom:14px; unicode-bidi:plaintext; }
 .confirm-detail-card{ position:relative; background:rgba(0,243,255,0.07); border:1px solid rgba(0,243,255,0.3); border-radius:4px; padding:14px; margin-bottom:20px; box-shadow:0 0 30px rgba(0,243,255,0.15); }
-.confirm-detail-title{ font-size:16px; font-weight:700; color:var(--color-white); margin-bottom:6px; }
+.confirm-detail-title{ font-size:16px; font-weight:700; color:var(--color-white); margin-bottom:6px; unicode-bidi:plaintext; }
 .confirm-field-row{ display:flex; gap:10px; font-size:13px; line-height:1.6; margin-bottom:6px; }
 .confirm-field-row .k{ color:var(--color-text-dim); min-width:64px; flex-shrink:0; font-size:11px; letter-spacing:.5px; text-transform:uppercase; padding-top:2px; }
-.confirm-field-row .v{ color:var(--color-white); word-break:break-word; white-space:pre-line; }
+.confirm-field-row .v{ color:var(--color-white); word-break:break-word; white-space:pre-line; unicode-bidi:plaintext; }
 .confirm-edit-fields{ display:none; flex-direction:column; gap:10px; }
 .confirm-edit-fields.show{ display:flex; }
 .confirm-edit-fields label{ font-size:11px; color:var(--color-text-dim); margin-bottom:4px; display:block; }
@@ -422,6 +428,10 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
        mock's fixed guess. */
     .app-header{ padding-top:max(16px, env(safe-area-inset-top)); }
     .bottom-nav{ padding-bottom:max(10px, env(safe-area-inset-bottom)); }
+    /* Same reasoning as .app-header above — .sheet-overlay's fixed 56px top
+       padding was also sized to clear the fake mock bezel, not a real
+       notch/punch-hole, and got missed when the header/nav were fixed. */
+    .sheet-overlay{ padding-top:max(20px, env(safe-area-inset-top)); padding-bottom:max(24px, env(safe-area-inset-bottom)); }
 }
 </style>
 </head>
@@ -524,7 +534,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 
             <div class="hud-panel">
               <div class="hud-panel-title">
-                <span>▸ האירועים הקרובים</span>
+                <span>◂ האירועים הקרובים</span>
                 <span class="hud-panel-toggle" id="home-upcoming-toggle" style="display:none;" onclick="toggleHomeUpcoming()">הצג הכל</span>
               </div>
               <div id="home-upcoming-list"><div class="events-empty">טוען…</div></div>
@@ -560,7 +570,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
             </div>
 
             <div class="activity-section">
-              <div class="activity-title">▸ פעילות אחרונה</div>
+              <div class="activity-title">◂ פעילות אחרונה</div>
               <div id="home-activity-list"><div class="events-empty">אין עדיין פקודות — נסה להקיש על הכדור.</div></div>
             </div>
           </div>
@@ -578,19 +588,19 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
             </div>
             <div id="agenda-week-view" style="display:none;">
               <div class="hud-panel" style="margin-top:0;">
-                <div class="hud-panel-title"><span>▸ סדר השבוע</span></div>
+                <div class="hud-panel-title"><span>◂ סדר השבוע</span></div>
                 <div id="agenda-week-text" class="events-empty">טוען…</div>
               </div>
             </div>
 
             <div class="hud-panel">
-              <div class="hud-panel-title" style="margin-bottom:5px;"><span>▸ ✉️ סיכום שבועי</span></div>
+              <div class="hud-panel-title" style="margin-bottom:5px;"><span>◂ ✉️ סיכום שבועי</span></div>
               <div style="font-size:12.5px; color:var(--color-cyan); margin-bottom:10px; line-height:1.6;">נשלח אוטומטית כל יום ראשון בבוקר. אפשר לשלוח תצוגה מקדימה עכשיו.</div>
               <div class="action-pill-btn" onclick="sendWeeklySummaryNow()">שלח עכשיו</div>
             </div>
 
             <div class="hud-panel">
-              <div class="hud-panel-title" style="margin-bottom:8px;"><span>▸ ⏰ תזכורת חדשה</span></div>
+              <div class="hud-panel-title" style="margin-bottom:8px;"><span>◂ ⏰ תזכורת חדשה</span></div>
               <div class="reminder-row">
                 <input class="input-field" id="reminder-text-input" placeholder="למה להזכיר?">
                 <input class="input-field" id="reminder-time-input" value="09:00">
@@ -639,11 +649,11 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
               </div>
             </div>
 
-            <div class="settings-sub">▸ חיבורים</div>
+            <div class="settings-sub">◂ חיבורים</div>
             <div class="conn-row"><span>📅 Google Calendar</span><span class="ok">מחובר ✓</span></div>
             <div class="conn-row"><span>✉️ Gmail</span><span class="ok">מחובר ✓</span></div>
 
-            <div class="settings-sub">▸ קול</div>
+            <div class="settings-sub">◂ קול</div>
             <div class="voice-info-block">לחיצה לדיבור · מדבר בעברית · JARVIS עונה באנגלית<br/>אישור לפני פעולה: פעיל — כל שינוי ביומן או שליחת מייל ממתין לאישורך, וניתן לעריכה לפני האישור.</div>
 
             <div class="warn-block">⚠ המערכת עדיין בשלב בדיקות (Testing) — נגישה רק לחשבונות שאושרו מראש.</div>
@@ -702,7 +712,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 
         <!-- Tool panel sheet (stocks / qa / places / current) -->
         <div class="sheet-overlay cyan" id="tool-panel-sheet">
-          <div class="sheet-header"><span class="title" id="tool-panel-title">▸ חיפוש מניה</span><button class="sheet-close" onclick="closeToolPanel()">✕</button></div>
+          <div class="sheet-header"><span class="title" id="tool-panel-title">◂ חיפוש מניה</span><button class="sheet-close" onclick="closeToolPanel()">✕</button></div>
 
           <div class="tool-sub" id="panel-stocks">
             <div class="tool-search-row">
@@ -733,7 +743,7 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
 
         <!-- Switch account sheet -->
         <div class="sheet-overlay cyan" id="switch-account-sheet">
-          <div class="sheet-header"><span class="title">▸ החלפת חשבון</span><button class="sheet-close" onclick="closeSwitchAccountModal()">✕</button></div>
+          <div class="sheet-header"><span class="title">◂ החלפת חשבון</span><button class="sheet-close" onclick="closeSwitchAccountModal()">✕</button></div>
           <div id="switch-account-list"></div>
         </div>
 
@@ -1142,7 +1152,11 @@ function initSpeechRecognition(){
         if (micMuted) return;
         const transcript = event.results[0][0].transcript.toLowerCase().trim();
 
-        if (pendingConfirmToken) {
+        if (pendingConfirmToken || pendingConfirmEvt) {
+            // web_search/"places" confirmations are deliberately tokenless
+            // (see resolveConfirmation) — gating on the token alone meant a
+            // spoken "yes"/"no" while that specific sheet was open fell
+            // through to a brand-new LLM command instead of approving it.
             micMuted = true;
             handleConfirmationReply(transcript);
         } else if (!isAwake) {
@@ -1198,7 +1212,7 @@ async function sendCommand(commandText){
     if (!commandText || !commandText.trim()) return;
     $('cmd-input').value = '';
 
-    if (pendingConfirmToken) {
+    if (pendingConfirmToken || pendingConfirmEvt) {
         handleConfirmationReply(commandText.toLowerCase().trim());
         return;
     }
@@ -1290,6 +1304,12 @@ function buildEventRow(ev, showCancel){
     const s = el('span','s'); s.textContent = ev.summary;
     row.append(t, s);
     if (showCancel && ev.id) {
+        // openRescheduleForm() is defined further down but already exists
+        // and is fully wired to the real command flow — it just never had
+        // an on-screen entry point until now.
+        const reschedBtn = el('button','cancel-x resched'); reschedBtn.innerText = '🔄'; reschedBtn.title = 'שנה שעה';
+        reschedBtn.onclick = (e) => { e.stopPropagation(); openRescheduleForm(ev); };
+        row.appendChild(reschedBtn);
         const btn = el('button','cancel-x'); btn.innerText = '✕'; btn.title = 'בטל';
         btn.onclick = (e) => { e.stopPropagation(); cancelEvent(ev.id, ev.summary); };
         row.appendChild(btn);
@@ -1576,10 +1596,13 @@ function handleComposeFilesChosen(fileList){
     $('compose-file-input').value = '';
     renderComposeFileChips();
 }
+let composeDraftBusy = false;
 async function draftComposeEmail(){
+    if (composeDraftBusy) return; // a fast double-tap otherwise fires two drafts at once
     const to = $('compose-to').value.trim();
     const instructions = $('compose-instructions').value.trim();
     if (!instructions) return;
+    composeDraftBusy = true;
     try {
         const res = await fetch('/api/compose/draft', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, instructions }),
@@ -1592,6 +1615,7 @@ async function draftComposeEmail(){
         $('compose-draft-btn').style.display = 'none';
         $('compose-send-btn').style.display = 'block';
     } catch (err) { showToast('לא הצלחתי להתחבר לשרת כדי לנסח את המייל.', true); }
+    finally { composeDraftBusy = false; }
 }
 function _fileToBase64(file){
     return new Promise((resolve, reject) => {
@@ -1601,15 +1625,18 @@ function _fileToBase64(file){
         reader.readAsDataURL(file);
     });
 }
+let composeSendBusy = false;
 async function sendComposeEmail(){
+    if (composeSendBusy) return; // otherwise a fast double-tap could register two separate confirm tokens
     const to = $('compose-to').value.trim();
     const subject = $('compose-subject').value.trim();
     const body = $('compose-body').value.trim();
     if (!to || !body) return;
+    composeSendBusy = true;
     let attachments = [];
     try {
         attachments = await Promise.all(composeSelectedFiles.map(async f => ({ filename: f.name, content_b64: await _fileToBase64(f) })));
-    } catch (err) { showToast('לא הצלחתי לקרוא אחד הקבצים המצורפים.', true); return; }
+    } catch (err) { showToast('לא הצלחתי לקרוא אחד הקבצים המצורפים.', true); composeSendBusy = false; return; }
     try {
         const res = await fetch('/api/compose/send', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, subject, body, attachments }),
@@ -1617,6 +1644,7 @@ async function sendComposeEmail(){
         const data = await res.json();
         if (data.token) { closeComposeModal(); showConfirmModal(data); } else { showToast(data.error || data.message || 'לא הצלחתי להכין את המייל.', true); }
     } catch (err) { showToast('לא הצלחתי להתחבר לשרת כדי לשלוח את המייל.', true); }
+    finally { composeSendBusy = false; }
 }
 
 /* ================================================================================
@@ -1625,7 +1653,7 @@ async function sendComposeEmail(){
    'market' is intentionally absent — no backing endpoint (see brief).
    ================================================================================ */
 let currentToolPanel = null;
-const TOOL_PANEL_TITLES = { stocks: '▸ חיפוש מניה', qa: '▸ צאט', places: '▸ מקומות', current: '▸ עדכונים' };
+const TOOL_PANEL_TITLES = { stocks: '◂ חיפוש מניה', qa: '◂ צאט', places: '◂ מקומות', current: '◂ עדכונים' };
 function openToolPanel(key){
     currentToolPanel = key;
     $('tool-panel-title').innerText = TOOL_PANEL_TITLES[key] || '';
@@ -1639,16 +1667,20 @@ function openToolPanel(key){
 }
 function closeToolPanel(){ $('tool-panel-sheet').classList.remove('show'); currentToolPanel = null; }
 
+let stockSearchBusy = false;
 async function searchStock(){
+    if (stockSearchBusy) return;
     const q = $('stock-query').value.trim();
     if (!q) return;
+    stockSearchBusy = true;
     const box = $('stock-result');
     box.innerHTML = '<div class="events-empty">מחפש…</div>';
     let data;
     try {
         const res = await fetch(`/api/stocks/quote?q=${encodeURIComponent(q)}`);
         data = await res.json();
-    } catch (e) { box.innerHTML = '<div class="events-empty">לא הצלחתי להתחבר לשרת.</div>'; return; }
+    } catch (e) { box.innerHTML = '<div class="events-empty">לא הצלחתי להתחבר לשרת.</div>'; stockSearchBusy = false; return; }
+    stockSearchBusy = false;
     if (data.error) { box.innerHTML = `<div class="events-empty" dir="auto">${escapeHtml(data.error)}</div>`; return; }
     const upToday = data.change_today >= 0, upWeek = data.change_week >= 0;
     const chartColor = upWeek ? '#00ff88' : '#ff3b3b';
@@ -1691,30 +1723,41 @@ function buildStockSparkline(closes, color){
     </svg>`;
 }
 
+let qaBusy = false;
 async function submitQa(){
+    if (qaBusy) return;
     const q = $('qa-query').value.trim();
     if (!q) return;
+    qaBusy = true;
     const box = $('qa-answer'); box.classList.add('show'); box.innerText = 'חושב…';
     try {
         const res = await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: q }) });
         const data = await res.json();
         box.innerText = data.response || '';
     } catch (err) { box.innerText = 'לא הצלחתי להתחבר לשרת.'; }
+    finally { qaBusy = false; }
 }
+let currentBusy = false;
 async function submitCurrent(){
+    if (currentBusy) return;
     const q = $('current-query').value.trim();
     if (!q) return;
+    currentBusy = true;
     const box = $('current-answer'); box.classList.add('show'); box.innerText = 'בודק…';
     try {
         const res = await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: q }) });
         const data = await res.json();
         box.innerText = data.response || '';
     } catch (err) { box.innerText = 'לא הצלחתי להתחבר לשרת.'; }
+    finally { currentBusy = false; }
 }
 /* Places: no dedicated endpoint — routed through the normal command flow
    (per the brief), then the existing SSE/polling confirmation mechanism
    takes over exactly like any other web_search confirmation. */
+let placesBusy = false;
 async function submitPlaces(){
+    if (placesBusy) return;
+    placesBusy = true;
     const q = $('places-query').value.trim() || 'בית קפה קרוב אליי';
     closeToolPanel();
     const logId = addActivity(`חיפוש מקומות: ${q}`, 'find_nearby_places', 'pending');
@@ -1723,6 +1766,7 @@ async function submitPlaces(){
         const data = await res.json();
         if (!pendingConfirmEvt) { updateActivityStatus(logId, 'executed'); showToast(data.response || ''); }
     } catch (err) { updateActivityStatus(logId, 'cancelled'); showToast('לא הצלחתי להתחבר לשרת.', true); }
+    finally { placesBusy = false; }
 }
 
 /* ================================================================================
