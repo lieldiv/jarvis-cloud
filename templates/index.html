@@ -446,6 +446,16 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
        padding was also sized to clear the fake mock bezel, not a real
        notch/punch-hole, and got missed when the header/nav were fixed. */
     .sheet-overlay{ padding-top:max(20px, env(safe-area-inset-top)); padding-bottom:max(24px, env(safe-area-inset-bottom)); }
+    /* Every text input/textarea in this file was sized 13-14px for visual
+       density — completely independent of touch-action, iOS Safari (and
+       some Android browsers) automatically zoom the whole page in when a
+       focused form field's font-size is under 16px, then doesn't reliably
+       zoom back out on blur. That auto-zoom is almost certainly what "the
+       site shrinks/spins the moment I tap the command box" actually was —
+       a real device zooming itself, not a rendering bug. 16px is the
+       documented safe floor; kept desktop's smaller, denser sizing as-is
+       since this mechanism doesn't exist there. */
+    input, textarea, select { font-size: 16px !important; }
 }
 </style>
 </head>
