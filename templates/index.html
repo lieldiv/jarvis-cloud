@@ -461,7 +461,23 @@ input,textarea{ direction:rtl; unicode-bidi:plaintext; color-scheme:dark; }
        hid — on the real device, use its actual safe-area instead of the
        mock's fixed guess. */
     .app-header{ padding-top:max(16px, env(safe-area-inset-top)); }
-    .bottom-nav{ padding-bottom:max(10px, env(safe-area-inset-bottom)); }
+    /* position:absolute here anchors to .device-screen's own (static-height,
+       plain-vh) layout box, not to whatever's actually on screen right now.
+       Android Chrome's own toolbar lives at the BOTTOM of the screen by
+       default and auto-hides/reshows as you scroll -- when it's showing, it
+       draws directly over this same bottom strip, since our frame's height
+       never shrinks to make room for it (that's the whole point of using
+       plain vh instead of dvh). Result: the nav bar (and the command input
+       row above it) intermittently vanish under the browser's own UI while
+       scrolling, reported as "the categories/history bar sometimes
+       disappears". position:fixed tracks the real visual viewport on mobile
+       browsers, so it stays clear of the toolbar automatically -- no vh
+       gymnastics needed for just these two bottom-pinned bars. Safe to
+       switch only here (not the whole frame): on mobile .device-frame
+       already fills the true viewport edge-to-edge, so fixed and absolute
+       resolve to the same box; on desktop this rule doesn't apply at all. */
+    .cmd-input-row{ position:fixed; }
+    .bottom-nav{ position:fixed; padding-bottom:max(10px, env(safe-area-inset-bottom)); }
     /* Same reasoning as .app-header above — .sheet-overlay's fixed 56px top
        padding was also sized to clear the fake mock bezel, not a real
        notch/punch-hole, and got missed when the header/nav were fixed. */
