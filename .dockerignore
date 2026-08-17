@@ -1,0 +1,17 @@
+# Same reasoning as .gitignore -- never bake secrets/local state into the
+# image. Docker doesn't read .gitignore automatically, so this is separate.
+.git/
+.env
+.google_cache/
+.ms_cache.bin
+.spotify_cache
+.certs/
+jarvis.log
+__pycache__/
+*.pyc
+users.db
+data/
+build/
+dist/
+gauntlet/
+gauntlet_main.py
