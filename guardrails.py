@@ -121,7 +121,20 @@ def resolve_safe_path(user_path: str, user_id: str = None) -> str:
     # absolute or tries to climb out with "..". realpath collapses "..".
     candidate = os.path.realpath(os.path.join(root, user_path.lstrip("/\\")))
 
-    if os.path.commonpath([candidate, root]) != root:
+    # A Windows drive-letter path (e.g. "D:\evil") makes os.path.join discard
+    # `root` entirely, same as any other absolute path — but unlike a
+    # same-drive absolute path, comparing it against `root` here raises
+    # ValueError ("Paths don't have the same drive") instead of returning a
+    # mismatch. Every caller only catches SandboxViolation, so this used to
+    # propagate as a raw, uncaught ValueError: the operation still never ran
+    # (no path bypass — the exception happens before this function can
+    # return anything), but it surfaced as an ugly unhandled crash instead
+    # of a clean refusal. Different drive is definitionally outside root.
+    try:
+        inside_root = os.path.commonpath([candidate, root]) == root
+    except ValueError:
+        inside_root = False
+    if not inside_root:
         raise SandboxViolation(
             f"'{user_path}' resolves outside the JARVIS workspace. Refused."
         )
